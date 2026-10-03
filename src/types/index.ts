@@ -81,6 +81,9 @@ export type AppointmentStatus =
   | 'cancelled'
   | 'rescheduled';
 
+export type VisitType = 'new_visit' | 'follow_up';
+export type VisitTypeSource = 'detected' | 'patient_confirmed';
+
 export interface Appointment {
   _id: string;
   patientId: string;
@@ -94,7 +97,11 @@ export interface Appointment {
   departmentName: string;
   appointmentDate: string;
   appointmentTime: string;
-  appointmentType: 'new_visit' | 'follow_up';
+  appointmentType: VisitType;
+  visitType?: VisitType;
+  visitTypeSource?: VisitTypeSource;
+  previousAppointmentId?: string | null;
+  previousAppointmentReason?: string;
   tokenNumber: string;
   status: AppointmentStatus;
   arrivedAt?: string;
@@ -107,6 +114,32 @@ export interface Appointment {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VisitTypeDetectionResult {
+  visitType: VisitType;
+  visitTypeSource: VisitTypeSource;
+  previousAppointmentId: string | null;
+  reason: string;
+  matchedDoctorName?: string;
+  matchedDepartmentName?: string;
+  matchedDate?: string;
+  needsConfirmation?: boolean;
+}
+
+export interface AppointmentPreparationInfo {
+  appointmentId: string;
+  visitType: VisitType | 'unavailable';
+  visitTypeLabel: string;
+  doctorName: string;
+  departmentName: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  instructions: string[];
+  documentsToBring: string[];
+  recommendedArrivalTimeMinutes: number;
+  medicationNote: string;
+  locationNote: string;
 }
 
 export interface QueueState {

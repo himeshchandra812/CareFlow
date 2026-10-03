@@ -13,7 +13,8 @@ import {
   Sparkles,
   ArrowRight,
   PhoneCall,
-  FileCheck
+  FileCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { SupportedLanguage, Appointment, Department } from '../types/index.js';
 import { QueueCard } from './QueueCard.js';
@@ -156,6 +157,72 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 onTrackQueue={() => onNavigate('queue')}
                 onArrivalSuccess={() => onAppointmentUpdate?.()}
               />
+
+              {/* Dashboard Preparation Card for Active Appointment */}
+              <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileCheck className="w-5 h-5 text-teal-700" />
+                    <h3 className="font-extrabold text-slate-900 text-base font-outfit">
+                      Before Your Appointment
+                    </h3>
+                  </div>
+                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                    (activeAppointment.visitType || activeAppointment.appointmentType) === 'follow_up'
+                      ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                      : 'bg-teal-100 text-teal-800 border border-teal-200'
+                  }`}>
+                    {(activeAppointment.visitType || activeAppointment.appointmentType) === 'follow_up' ? 'Follow-up Visit' : 'New Visit'}
+                  </span>
+                </div>
+
+                <div className="text-xs text-slate-600 space-y-1">
+                  <div className="font-bold text-slate-900 text-sm">
+                    {activeAppointment.doctorName} • {activeAppointment.departmentName}
+                  </div>
+                  <div className="text-slate-500 font-medium">
+                    {activeAppointment.appointmentDate} • {activeAppointment.appointmentTime}
+                  </div>
+                </div>
+
+                {/* Contextual Preparation Checkmarks */}
+                <div className="space-y-2 pt-1">
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-2.5 text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-800 font-medium leading-tight">
+                      {(activeAppointment.visitType || activeAppointment.appointmentType) === 'follow_up'
+                        ? 'Bring reports & prescriptions from your previous consultation'
+                        : 'Bring valid Photo ID or CareFlow Hospital Card'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-2.5 text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-800 font-medium leading-tight">
+                      {(activeAppointment.visitType || activeAppointment.appointmentType) === 'follow_up'
+                        ? 'Bring any newly completed lab, ECG, or imaging test results'
+                        : 'Bring previous medical history & current prescription list'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-2.5 text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                    <span className="text-slate-800 font-medium leading-tight">
+                      Arrive {(activeAppointment.visitType || activeAppointment.appointmentType) === 'follow_up' ? '10' : '15'} minutes early for registration & vitals
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    onClick={() => onNavigate('preparation', { appointmentId: activeAppointment._id, departmentId: activeAppointment.departmentId })}
+                    className="w-full py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>View Full Preparation Guidelines</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="bg-slate-100 rounded-2xl p-6 border border-dashed border-slate-300 text-center space-y-3">

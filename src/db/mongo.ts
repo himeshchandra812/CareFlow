@@ -15,7 +15,11 @@ import {
   HospitalLocation,
   Appointment,
   QueueState,
-  Patient
+  Patient,
+  VisitType,
+  VisitTypeSource,
+  VisitTypeDetectionResult,
+  AppointmentPreparationInfo
 } from '../types/index.js';
 
 declare global {
@@ -253,13 +257,134 @@ export async function getAppointmentById(id: string): Promise<Appointment | null
   return inMemoryStore.appointments.find((a) => a._id === id) || null;
 }
 
+export async function detectVisitType(params: {
+  patientId?: string;
+  doctorId?: string;
+  departmentId?: string;
+}): Promise<VisitTypeDetectionResult> {
+  const patientId = params.patientId || 'pat_rajesh_kumar';
+  const db = await connectToDatabase();
+
+  let patientAppointments: Appointment[] = [];
+  if (db) {
+    patientAppointments = await db
+      .collection<Appointment>('appointments')
+      .find({ patientId, status: { $ne: 'cancelled' } })
+      .sort({ createdAt: -1 })
+      .toArray();
+  } else {
+    patientAppointments = inMemoryStore.appointments.filter(
+      (a) => a.patientId === patientId && a.status !== 'cancelled'
+    );
+  }
+
+  // 1. Same Doctor match (highest priority)
+  if (params.doctorId) {
+    const docMatch = patientAppointments.find(
+      (a) =>
+        a.doctorId === params.doctorId &&
+        (a.status === 'completed' || a._id === 'app_1000' || new Date(a.appointmentDate) <= new Date())
+    );
+    if (docMatch) {
+      return {
+        visitType: 'follow_up',
+        visitTypeSource: 'detected',
+        previousAppointmentId: docMatch._id,
+        matchedDoctorName: docMatch.doctorName,
+        matchedDate: docMatch.appointmentDate,
+        reason: `Based on your previous appointment with ${docMatch.doctorName} on ${docMatch.appointmentDate}.`
+      };
+    }
+  }
+
+  // 2. Same Department match (second priority)
+  if (params.departmentId) {
+    const deptMatch = patientAppointments.find(
+      (a) =>
+        a.departmentId === params.departmentId &&
+        (a.status === 'completed' || a._id === 'app_1000' || new Date(a.appointmentDate) <= new Date())
+    );
+    if (deptMatch) {
+      return {
+        visitType: 'follow_up',
+        visitTypeSource: 'detected',
+        previousAppointmentId: deptMatch._id,
+        matchedDepartmentName: deptMatch.departmentName,
+        matchedDate: deptMatch.appointmentDate,
+        reason: `Based on your previous appointment in ${deptMatch.departmentName} on ${deptMatch.appointmentDate}.`
+      };
+    }
+  }
+
+  // 3. No previous relevant consultation found
+  return {
+    visitType: 'new_visit',
+    visitTypeSource: 'detected',
+    previousAppointmentId: null,
+    reason: 'No previous relevant consultation was found.'
+  };
+}
+
+export async function getAppointmentPreparation(
+  appointmentId: string
+): Promise<AppointmentPreparationInfo | null> {
+  const appointment = await getAppointmentById(appointmentId);
+  if (!appointment) return null;
+
+  const dept = await getDepartmentById(appointment.departmentId);
+  const visitType: VisitType =
+    appointment.visitType || appointment.appointmentType || 'new_visit';
+
+  const documentsToBring =
+    visitType === 'follow_up'
+      ? [
+          'Reports & prescriptions from your previous consultation',
+          'Any newly completed lab, ECG, or imaging test results',
+          'Your current daily prescription medication list',
+          'Government Photo ID or Hospital Registration Card'
+        ]
+      : [
+          'Valid Government Photo ID or Hospital Registration Card',
+          'Previous medical history records or test reports if available',
+          'List of all current medications & known drug allergies'
+        ];
+
+  const instructions =
+    dept?.preparationInstructions && dept.preparationInstructions.length > 0
+      ? dept.preparationInstructions
+      : [
+          'Arrive on time to ensure prompt consultation.',
+          'Bring all relevant health documents.',
+          'Wear loose-fitting, comfortable clothing.'
+        ];
+
+  return {
+    appointmentId: appointment._id,
+    visitType,
+    visitTypeLabel: visitType === 'follow_up' ? 'Follow-up Visit' : 'New Visit',
+    doctorName: appointment.doctorName,
+    departmentName: appointment.departmentName,
+    appointmentDate: appointment.appointmentDate,
+    appointmentTime: appointment.appointmentTime,
+    instructions,
+    documentsToBring,
+    recommendedArrivalTimeMinutes: visitType === 'follow_up' ? 10 : 15,
+    medicationNote:
+      'Please carry all daily prescriptions and current ongoing medications in their original packaging.',
+    locationNote: `${appointment.locationDetails.block} • ${appointment.locationDetails.floor} • ${appointment.locationDetails.room}`
+  };
+}
+
 export async function createAppointment(bookingData: {
   patientName: string;
   patientPhone: string;
   doctorId: string;
   appointmentDate: string;
   appointmentTime: string;
-  appointmentType: 'new_visit' | 'follow_up';
+  appointmentType?: VisitType;
+  visitType?: VisitType;
+  visitTypeSource?: VisitTypeSource;
+  previousAppointmentId?: string | null;
 }): Promise<{ appointment: Appointment; queue: QueueState }> {
   const db = await connectToDatabase();
   
@@ -276,7 +401,24 @@ export async function createAppointment(bookingData: {
 
   const dept = await getDepartmentById(doctor.departmentId);
 
-  // 3. Check existing count for unique token calculation
+  // 3. Perform Server-side Visit Type Detection
+  const detection = await detectVisitType({
+    patientId: 'pat_rajesh_kumar',
+    doctorId: doctor._id,
+    departmentId: doctor.departmentId
+  });
+
+  // Determine final visitType based on detection & explicit patient input
+  const finalVisitType: VisitType =
+    bookingData.visitType || bookingData.appointmentType || detection.visitType;
+  const finalVisitTypeSource: VisitTypeSource =
+    bookingData.visitTypeSource || (bookingData.visitType ? 'patient_confirmed' : detection.visitTypeSource);
+  const finalPrevId: string | null =
+    bookingData.previousAppointmentId !== undefined
+      ? bookingData.previousAppointmentId
+      : detection.previousAppointmentId;
+
+  // 4. Check existing count for unique token calculation
   const existingCount = db
     ? await db.collection('appointments').countDocuments({
         doctorId: doctor._id,
@@ -289,7 +431,7 @@ export async function createAppointment(bookingData: {
   const num = 120 + existingCount + 1;
   const tokenNumber = `A-${num}`;
 
-  // 4. Create appointment document
+  // 5. Create appointment document
   const newApp: Appointment = {
     _id: `app_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     patientId: 'pat_rajesh_kumar',
@@ -303,7 +445,11 @@ export async function createAppointment(bookingData: {
     departmentName: doctor.departmentName,
     appointmentDate: bookingData.appointmentDate,
     appointmentTime: bookingData.appointmentTime,
-    appointmentType: bookingData.appointmentType,
+    appointmentType: finalVisitType,
+    visitType: finalVisitType,
+    visitTypeSource: finalVisitTypeSource,
+    previousAppointmentId: finalPrevId,
+    previousAppointmentReason: detection.reason,
     tokenNumber,
     status: 'confirmed',
     estimatedWaitTime: Math.max(12, existingCount * 3),

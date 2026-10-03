@@ -364,6 +364,33 @@ export const SEED_PATIENTS: Patient[] = [
 
 export const SEED_APPOINTMENTS: Appointment[] = [
   {
+    _id: 'app_1000',
+    patientId: 'pat_rajesh_kumar',
+    patientName: 'Rajesh Kumar',
+    patientPhone: '+91 98765 43210',
+    doctorId: 'doc_anil_sharma',
+    doctorName: 'Dr. Anil Sharma',
+    doctorSpecialization: 'Senior Cardiologist',
+    hospitalId: 'hosp_careflow_01',
+    departmentId: 'dept_cardiology',
+    departmentName: 'Cardiology',
+    appointmentDate: '2026-09-12',
+    appointmentTime: '10:00 AM',
+    appointmentType: 'new_visit',
+    visitType: 'new_visit',
+    visitTypeSource: 'detected',
+    tokenNumber: 'A-102',
+    status: 'completed',
+    estimatedWaitTime: 0,
+    locationDetails: {
+      block: 'Block B',
+      floor: '2nd Floor',
+      room: 'Room 204 (Cardiology Clinic)'
+    },
+    createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+    updatedAt: new Date(Date.now() - 20 * 86400000).toISOString()
+  },
+  {
     _id: 'app_1001',
     patientId: 'pat_rajesh_kumar',
     patientName: 'Rajesh Kumar',
@@ -376,7 +403,11 @@ export const SEED_APPOINTMENTS: Appointment[] = [
     departmentName: 'Cardiology',
     appointmentDate: new Date().toISOString().split('T')[0],
     appointmentTime: '10:30 AM',
-    appointmentType: 'new_visit',
+    appointmentType: 'follow_up',
+    visitType: 'follow_up',
+    visitTypeSource: 'detected',
+    previousAppointmentId: 'app_1000',
+    previousAppointmentReason: 'Based on your previous consultation with Dr. Anil Sharma on 2026-09-12.',
     tokenNumber: 'A-127',
     status: 'confirmed',
     estimatedWaitTime: 24,

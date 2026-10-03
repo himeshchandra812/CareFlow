@@ -148,11 +148,24 @@ export const AppointmentsList: React.FC<AppointmentsListProps> = ({
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-slate-900 text-lg font-outfit">
                         {appt.doctorName}
                       </span>
                       <StatusBadge status={appt.status} size="sm" />
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                        (appt.visitType || appt.appointmentType) === 'follow_up'
+                          ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                          : (appt.visitType || appt.appointmentType) === 'new_visit'
+                          ? 'bg-teal-100 text-teal-800 border border-teal-200'
+                          : 'bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}>
+                        {(appt.visitType || appt.appointmentType) === 'follow_up'
+                          ? 'Follow-up Visit'
+                          : (appt.visitType || appt.appointmentType) === 'new_visit'
+                          ? 'New Visit'
+                          : 'Visit type unavailable'}
+                      </span>
                     </div>
                     <p className="text-xs font-semibold text-teal-700">
                       {appt.departmentName} Department

@@ -59,14 +59,19 @@ export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
       {/* Active Appointment Highlight for Senior */}
       {activeAppointment && (
         <div className="bg-amber-50 border-3 border-amber-400 p-6 rounded-2xl shadow-md space-y-4">
-          <div className="flex items-center justify-between border-b border-amber-200 pb-3">
+          <div className="flex items-center justify-between border-b border-amber-200 pb-3 flex-wrap gap-2">
             <span className="text-lg font-bold text-amber-900 flex items-center gap-2">
               <Calendar className="w-6 h-6 text-amber-700" />
               {t('upcomingAppointment', currentLang)}
             </span>
-            <span className="bg-amber-200 text-amber-900 font-extrabold text-lg px-3 py-1 rounded-lg">
-              Token {activeAppointment.tokenNumber}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-amber-200 text-amber-900 font-extrabold text-sm sm:text-base px-3 py-1 rounded-lg">
+                {(activeAppointment.visitType || activeAppointment.appointmentType) === 'follow_up' ? 'FOLLOW-UP VISIT' : 'NEW VISIT'}
+              </span>
+              <span className="bg-amber-200 text-amber-900 font-extrabold text-lg px-3 py-1 rounded-lg">
+                Token {activeAppointment.tokenNumber}
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2 text-slate-900">

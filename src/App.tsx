@@ -238,6 +238,7 @@ export default function App() {
       {preparationDept ? (
         <PreparationCard
           department={preparationDept}
+          appointment={activeAppointment}
           onBack={() => setPreparationDept(null)}
         />
       ) : lastBookedResult ? (
@@ -293,9 +294,19 @@ export default function App() {
                 activeAppointment={activeAppointment}
                 departments={departments}
                 onNavigate={(tab, extra) => {
-                  if (extra?.search) setSearchFilter(extra.search);
-                  if (extra?.departmentId) setMapTargetDeptId(extra.departmentId);
-                  setCurrentTab(tab);
+                  if (tab === 'preparation') {
+                    if (extra?.departmentId) {
+                      const dept = departments.find(d => d._id === extra.departmentId);
+                      if (dept) setPreparationDept(dept);
+                    } else if (activeAppointment) {
+                      const dept = departments.find(d => d._id === activeAppointment.departmentId);
+                      if (dept) setPreparationDept(dept);
+                    }
+                  } else {
+                    if (extra?.search) setSearchFilter(extra.search);
+                    if (extra?.departmentId) setMapTargetDeptId(extra.departmentId);
+                    setCurrentTab(tab);
+                  }
                 }}
                 onOpenVoice={() => setIsVoiceOpen(true)}
                 onSelectDepartment={(deptId) => {

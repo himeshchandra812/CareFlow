@@ -127,8 +127,16 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-1 rounded-md">
-                {appointment.appointmentType === 'new_visit' ? 'New Visit' : 'Follow-up'}
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${
+                (appointment.visitType || appointment.appointmentType) === 'follow_up'
+                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                  : 'bg-teal-100 text-teal-800 border border-teal-200'
+              }`}>
+                {(appointment.visitType || appointment.appointmentType) === 'follow_up'
+                  ? 'Follow-up Visit'
+                  : (appointment.visitType || appointment.appointmentType) === 'new_visit'
+                  ? 'New Visit'
+                  : 'Visit type unavailable'}
               </span>
               <StatusBadge status={appointment.status} size="sm" />
             </div>

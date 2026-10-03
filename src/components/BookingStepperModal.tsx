@@ -63,6 +63,34 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
   const [patientPhone, setPatientPhone] = useState('+91 98765 43210');
   const [patientEmail, setPatientEmail] = useState('rajesh.kumar@careflow.org');
   const [visitType, setVisitType] = useState<'new_visit' | 'follow_up'>('new_visit');
+  const [visitTypeSource, setVisitTypeSource] = useState<'detected' | 'patient_confirmed'>('detected');
+  const [previousAppointmentId, setPreviousAppointmentId] = useState<string | null>(null);
+  const [visitDetectionReason, setVisitDetectionReason] = useState<string>('');
+  const [isDetectingVisit, setIsDetectingVisit] = useState(false);
+
+  // Automatically detect visit type based on MongoDB patient history whenever selectedDoctor changes
+  useEffect(() => {
+    let isMounted = true;
+    if (selectedDoctor?._id) {
+      setIsDetectingVisit(true);
+      api.detectVisitType({ doctorId: selectedDoctor._id, departmentId: selectedDoctor.departmentId })
+        .then((res) => {
+          if (isMounted) {
+            setVisitType(res.visitType);
+            setVisitTypeSource(res.visitTypeSource);
+            setPreviousAppointmentId(res.previousAppointmentId);
+            setVisitDetectionReason(res.reason);
+            setIsDetectingVisit(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setIsDetectingVisit(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDoctor]);
 
   // Confirmation acknowledgment
   const [hasConfirmedSummary, setHasConfirmedSummary] = useState(false);
@@ -123,7 +151,10 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
         doctorId: selectedDoctor._id,
         appointmentDate: selectedDate,
         appointmentTime: selectedSlot,
-        appointmentType: visitType
+        appointmentType: visitType,
+        visitType: visitType,
+        visitTypeSource: visitTypeSource,
+        previousAppointmentId: previousAppointmentId
       });
 
       // 2. Only after successful backend response, trigger booking success
@@ -552,27 +583,57 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">Consultation Type</label>
-                  <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block font-outfit">
+                      Visit Type
+                    </label>
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                      visitType === 'follow_up'
+                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                        : 'bg-teal-100 text-teal-800 border border-teal-200'
+                    }`}>
+                      {visitType === 'follow_up' ? 'Follow-up Visit' : 'New Visit'}
+                    </span>
+                  </div>
+
+                  {visitDetectionReason && (
+                    <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
+                      <div className="font-semibold text-teal-900 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse" />
+                        <span>MongoDB Patient History Detection:</span>
+                      </div>
+                      <p className="text-slate-600 pl-3.5 leading-relaxed">
+                        {visitDetectionReason}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
                     <button
                       type="button"
-                      onClick={() => setVisitType('new_visit')}
-                      className={`p-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer min-h-[44px] ${
+                      onClick={() => {
+                        setVisitType('new_visit');
+                        setVisitTypeSource('patient_confirmed');
+                      }}
+                      className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer min-h-[44px] ${
                         visitType === 'new_visit'
-                          ? 'bg-teal-50 text-teal-800 border-teal-300 shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-teal-700 text-white border-teal-800 shadow-sm ring-2 ring-teal-500/30'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      New Visit (First Consultation)
+                      New Visit
                     </button>
                     <button
                       type="button"
-                      onClick={() => setVisitType('follow_up')}
-                      className={`p-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer min-h-[44px] ${
+                      onClick={() => {
+                        setVisitType('follow_up');
+                        setVisitTypeSource('patient_confirmed');
+                      }}
+                      className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer min-h-[44px] ${
                         visitType === 'follow_up'
-                          ? 'bg-teal-50 text-teal-800 border-teal-300 shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-teal-700 text-white border-teal-800 shadow-sm ring-2 ring-teal-500/30'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
                       Follow-up Visit

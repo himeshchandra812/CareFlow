@@ -6,7 +6,11 @@ import {
   Hospital,
   HospitalLocation,
   SarvamIntentResponse,
-  SupportedLanguage
+  SupportedLanguage,
+  VisitTypeDetectionResult,
+  AppointmentPreparationInfo,
+  VisitType,
+  VisitTypeSource
 } from '../types/index.js';
 
 const API_BASE = '/api';
@@ -42,13 +46,31 @@ export const api = {
 
   getAppointmentById: (id: string): Promise<Appointment> => fetchJson(`${API_BASE}/appointments/${id}`),
 
+  detectVisitType: (params: {
+    doctorId: string;
+    departmentId?: string;
+    patientId?: string;
+  }): Promise<VisitTypeDetectionResult> => {
+    const q = new URLSearchParams();
+    if (params.doctorId) q.append('doctorId', params.doctorId);
+    if (params.departmentId) q.append('departmentId', params.departmentId);
+    if (params.patientId) q.append('patientId', params.patientId);
+    return fetchJson(`${API_BASE}/appointments/detect-visit-type?${q.toString()}`);
+  },
+
+  getAppointmentPreparation: (id: string): Promise<AppointmentPreparationInfo> =>
+    fetchJson(`${API_BASE}/appointments/${id}/preparation`),
+
   createAppointment: (data: {
     patientName: string;
     patientPhone: string;
     doctorId: string;
     appointmentDate: string;
     appointmentTime: string;
-    appointmentType: 'new_visit' | 'follow_up';
+    appointmentType?: VisitType;
+    visitType?: VisitType;
+    visitTypeSource?: VisitTypeSource;
+    previousAppointmentId?: string | null;
   }): Promise<{ appointment: Appointment; queue: QueueState }> =>
     fetchJson(`${API_BASE}/appointments`, {
       method: 'POST',

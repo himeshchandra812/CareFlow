@@ -146,6 +146,10 @@ function parseMultilingualRuleEngine(
   else if (isENT) dept = 'ENT';
   else if (isGenMed) dept = 'General Medicine';
 
+  const isFollowUp = /follow-up|followup|follow up|dubaara|dobara|phir se|phir|mallee|malli|రుడు/i.test(text);
+  const isNewVisit = /new visit|first time|pehli baar|naya|kotha|కొత్త/i.test(text);
+  const detectedVisitType = isFollowUp ? 'follow_up' : isNewVisit ? 'new_visit' : undefined;
+
   // 1. Queue check intent
   if (/queue|token|wait|ahead|position|kitni der|kitna time|లైన్|టోకెన్|ఎంత సమయం|वेटिंग|कतार/i.test(text)) {
     return { intent: 'check_queue' };
@@ -178,7 +182,7 @@ function parseMultilingualRuleEngine(
 
   // 7. Booking intent
   if (/book|schedule|take appointment|appointment book|బుక్|बुकिंग|பதிவு/i.test(text)) {
-    return { intent: 'book_appointment', department: dept, date: 'tomorrow' };
+    return { intent: 'book_appointment', department: dept, date: 'tomorrow', visitType: detectedVisitType };
   }
 
   // 8. Department Discovery intent
@@ -193,7 +197,8 @@ function parseMultilingualRuleEngine(
       intent: 'find_doctor',
       department: dept || 'Cardiology',
       date: isTomorrow ? 'tomorrow' : 'today',
-      timePreference: 'morning'
+      timePreference: 'morning',
+      visitType: detectedVisitType
     };
   }
 

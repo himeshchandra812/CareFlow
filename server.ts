@@ -11,6 +11,8 @@ import {
   getDepartmentById,
   getAppointments,
   getAppointmentById,
+  detectVisitType,
+  getAppointmentPreparation,
   createAppointment,
   updateAppointmentStatus,
   rescheduleAppointment,
@@ -102,12 +104,36 @@ app.get('/api/departments/:id', async (req, res) => {
 });
 
 // Appointments
+app.get('/api/appointments/detect-visit-type', async (req, res) => {
+  try {
+    const { patientId, doctorId, departmentId } = req.query;
+    const result = await detectVisitType({
+      patientId: patientId as string,
+      doctorId: doctorId as string,
+      departmentId: departmentId as string
+    });
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: "We couldn't detect visit type right now. Please try again." });
+  }
+});
+
 app.get('/api/appointments', async (req, res) => {
   try {
     const apps = await getAppointments();
     res.json(apps);
   } catch (e: any) {
     res.status(500).json({ error: "We couldn't load your appointments right now. Please try again." });
+  }
+});
+
+app.get('/api/appointments/:id/preparation', async (req, res) => {
+  try {
+    const prep = await getAppointmentPreparation(req.params.id);
+    if (!prep) return res.status(404).json({ error: 'Preparation information not found' });
+    res.json(prep);
+  } catch (e: any) {
+    res.status(500).json({ error: "We couldn't load preparation information right now. Please try again." });
   }
 });
 
@@ -123,17 +149,32 @@ app.get('/api/appointments/:id', async (req, res) => {
 
 app.post('/api/appointments', async (req, res) => {
   try {
-    const { patientName, patientPhone, doctorId, appointmentDate, appointmentTime, appointmentType } = req.body;
+    const {
+      patientName,
+      patientPhone,
+      doctorId,
+      appointmentDate,
+      appointmentTime,
+      appointmentType,
+      visitType,
+      visitTypeSource,
+      previousAppointmentId
+    } = req.body;
+
     if (!doctorId || !appointmentDate || !appointmentTime) {
       return res.status(400).json({ error: 'Missing required booking fields: doctorId, appointmentDate, appointmentTime' });
     }
+
     const result = await createAppointment({
       patientName,
       patientPhone,
       doctorId,
       appointmentDate,
       appointmentTime,
-      appointmentType: appointmentType || 'new_visit'
+      appointmentType: visitType || appointmentType,
+      visitType: visitType || appointmentType,
+      visitTypeSource,
+      previousAppointmentId
     });
     res.status(201).json(result);
   } catch (e: any) {

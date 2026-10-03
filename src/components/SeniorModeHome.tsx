@@ -7,17 +7,21 @@ import { t } from '../services/i18n.js';
 interface SeniorModeHomeProps {
   currentLang: SupportedLanguage;
   activeAppointment: Appointment | null;
+  appointments: Appointment[];
   onNavigate: (tab: string) => void;
   onOpenVoice: () => void;
   onAppointmentUpdate?: () => void;
+  onSelectAppointmentId?: (apptId: string) => void;
 }
 
 export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
   currentLang,
   activeAppointment,
+  appointments,
   onNavigate,
   onOpenVoice,
-  onAppointmentUpdate
+  onAppointmentUpdate,
+  onSelectAppointmentId
 }) => {
   const [markingArrival, setMarkingArrival] = useState(false);
   const [arrivalError, setArrivalError] = useState<string | null>(null);
@@ -138,6 +142,42 @@ export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
               <MapPin className="w-6 h-6" />
               {t('getDirections', currentLang)}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Other Appointments for Seniors */}
+      {appointments.filter(a => (a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress') && a._id !== activeAppointment?._id).length > 0 && (
+        <div className="bg-white border-2 border-slate-300 p-6 rounded-2xl shadow-md space-y-4">
+          <h3 className="text-xl font-extrabold text-slate-800 uppercase tracking-wide text-teal-800">
+            YOUR OTHER UPCOMING APPOINTMENTS
+          </h3>
+          <div className="space-y-4">
+            {appointments
+              .filter(a => (a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress') && a._id !== activeAppointment?._id)
+              .map((appt) => (
+                <div key={appt._id} className="p-5 bg-slate-50 rounded-xl border border-slate-300 flex flex-col gap-3 text-left">
+                  <div className="space-y-1">
+                    <div className="text-2xl font-extrabold text-slate-900 flex items-center gap-2 flex-wrap">
+                      <span>{appt.doctorName}</span>
+                      <span className="text-sm font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-lg border border-amber-300">
+                        Token {appt.tokenNumber}
+                      </span>
+                    </div>
+                    <div className="text-lg font-bold text-slate-600">{appt.departmentName} Department</div>
+                    <div className="text-lg font-medium text-slate-700">{appt.appointmentDate} • {appt.appointmentTime}</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onSelectAppointmentId?.(appt._id);
+                      onNavigate('queue');
+                    }}
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-lg py-3 rounded-lg shadow-sm cursor-pointer"
+                  >
+                    SELECT AND TRACK QUEUE
+                  </button>
+                </div>
+              ))}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Mic,
@@ -21,7 +21,7 @@ import {
   Ban
 } from 'lucide-react';
 import { SupportedLanguage, SarvamIntentResponse } from '../types/index.js';
-import { startVoiceRecognition, LANG_SPEECH_CODES } from '../services/sarvamClient.js';
+import { LANG_SPEECH_CODES, speakText } from '../services/sarvamClient.js';
 import { api } from '../services/api.js';
 
 interface VoiceAssistantModalProps {
@@ -46,29 +46,125 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [context, setContext] = useState<Record<string, any>>({});
 
-  const handleStartListening = () => {
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = (reader.result as string).split(',')[1];
+        resolve(base64data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const handleStartListening = async () => {
+    // Release any active stream/recorder first to avoid conflicts
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+
     setErrorMessage('');
     setSarvamResponse(null);
     setRawSpeechText('');
     setPendingPreviewText('');
-    setIsListening(true);
+    audioChunksRef.current = [];
 
-    startVoiceRecognition(currentLang, {
-      onStart: () => setIsListening(true),
-      onResult: (text) => setRawSpeechText(text),
-      onError: (err) => {
-        setIsListening(false);
-        setErrorMessage('Voice assistance is temporarily unavailable. You can continue using CareFlow manually.');
-      },
-      onEnd: () => setIsListening(false)
-    });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        setIsProcessing(true);
+        try {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+          if (audioBlob.size < 100) {
+            throw new Error("No speech detected or recording was too short.");
+          }
+          const base64 = await blobToBase64(audioBlob);
+          console.log(`[Voice Assistant] Sending base64 audio to server (${base64.length} characters)...`);
+          
+          const result = await api.sendSarvamVoice(base64, currentLang, context);
+          console.log('[Voice Assistant] Response received:', result);
+          
+          setRawSpeechText(result.transcript);
+          setPendingPreviewText(result.transcript);
+          setSarvamResponse(result);
+          
+          if (result.extractedParams?.context) {
+            setContext((prev) => ({ ...prev, ...result.extractedParams?.context }));
+          }
+
+          if (result.responseText) {
+            try {
+              speakText(result.responseText, currentLang);
+            } catch {}
+          }
+
+          if (!result.extractedParams?.requiresConfirmation) {
+            onIntentExecute(result, false);
+          }
+        } catch (err: any) {
+          console.error('[Voice Assistant] Failed transcription/interpretation:', err);
+          setErrorMessage("Could not understand the recording. Please speak clearly or write your request below.");
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err: any) {
+      console.warn('[Voice Assistant] Mic access error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setErrorMessage('Microphone access was denied. Please enable mic permissions in your browser bar.');
+      } else {
+        setErrorMessage('Could not activate microphone. Please ensure your microphone is active and plugged in.');
+      }
+      setIsListening(false);
+    }
+  };
+
+  const handleStopListening = () => {
+    setIsListening(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
   };
 
   useEffect(() => {
-    if (!isListening && rawSpeechText.trim()) {
-      setPendingPreviewText(rawSpeechText);
-    }
-  }, [isListening, rawSpeechText]);
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   const executeNLU = async (queryText: string) => {
     if (!queryText.trim()) return;
@@ -86,7 +182,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
         setContext((prev) => ({ ...prev, ...result.extractedParams?.context }));
       }
 
-      // If no explicit confirmation is required (e.g. view_appointment, check_queue, navigate_hospital), execute immediately
       if (!result.extractedParams?.requiresConfirmation) {
         onIntentExecute(result, false);
       }
@@ -161,7 +256,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           {/* Microphone Central Area */}
           <div className="flex flex-col items-center justify-center text-center space-y-3 relative z-10 pt-2">
             <button
-              onClick={isListening ? () => setIsListening(false) : handleStartListening}
+              onClick={isListening ? handleStopListening : handleStartListening}
               className={`rounded-full flex items-center justify-center transition-all shadow-xl cursor-pointer ${
                 seniorMode ? 'w-24 h-24 sm:w-28 sm:h-28' : 'w-20 h-20 sm:w-24 sm:h-24'
               } ${
@@ -245,6 +340,51 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
               >
                 {sarvamResponse.responseText}
               </p>
+
+              {/* Clarification Options for Multiple Appointments */}
+              {sarvamResponse.extractedParams?.requiresClarification && sarvamResponse.extractedParams.options && (
+                <div className="p-3 bg-slate-900/90 rounded-2xl border border-teal-500/50 space-y-2 mt-3 text-left">
+                  <div className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                    Select an appointment:
+                  </div>
+                  <div className="space-y-2">
+                    {sarvamResponse.extractedParams.options.map((opt: any) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          const selectedAppt = {
+                            _id: opt.id,
+                            doctorName: opt.doctorName,
+                            departmentName: opt.departmentName,
+                            appointmentDate: opt.appointmentDate,
+                            appointmentTime: opt.appointmentTime,
+                            tokenNumber: opt.tokenNumber
+                          };
+                          onIntentExecute({
+                            ...sarvamResponse,
+                            extractedParams: {
+                              ...sarvamResponse.extractedParams,
+                              requiresClarification: false,
+                              appointment: selectedAppt
+                            }
+                          }, true);
+                          onClose();
+                        }}
+                        className="w-full p-2.5 bg-slate-800 hover:bg-slate-700 text-teal-200 border border-slate-700 rounded-xl text-xs font-bold text-left transition-colors flex justify-between items-center cursor-pointer"
+                      >
+                        <div>
+                          <div>{opt.doctorName} ({opt.departmentName})</div>
+                          <div className="text-[10px] text-slate-400 font-medium">{opt.appointmentDate} • {opt.appointmentTime}</div>
+                        </div>
+                        <span className="text-[10px] font-bold bg-teal-900/80 px-2 py-0.5 rounded-md text-teal-300 border border-teal-700">
+                          Token {opt.tokenNumber}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Consequential Action Confirmation Options */}
               {sarvamResponse.extractedParams?.requiresConfirmation && (

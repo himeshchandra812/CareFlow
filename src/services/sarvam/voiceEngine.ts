@@ -21,23 +21,39 @@ export async function processSarvamSTT(request: SarvamVoiceRequest): Promise<str
 
   if (apiKey && request.audioBase64) {
     try {
+      const audioBuffer = Buffer.from(request.audioBase64, 'base64');
+      const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.wav');
+      formData.append('model', 'saaras:v4');
+      
+      const langCode = request.language === 'en' 
+        ? 'en-IN' 
+        : request.language === 'hi' 
+          ? 'hi-IN' 
+          : `${request.language}-IN`;
+      formData.append('language_code', langCode);
+
+      console.log(`[Sarvam STT] Forwarding audio file to Sarvam API (${audioBuffer.byteLength} bytes) for language ${langCode}...`);
+
       const response = await fetch('https://api.sarvam.ai/speech-to-text', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': apiKey
+          'api-subscription-key': apiKey
         },
-        body: JSON.stringify({
-          audio: request.audioBase64,
-          language_code: request.language || 'en-IN'
-        })
+        body: formData
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[Sarvam STT] Transcription received successfully:', data.transcript);
         if (data.transcript) {
           return data.transcript;
         }
+      } else {
+        const errText = await response.text();
+        console.warn('[Sarvam STT] API returned non-OK status:', response.status, errText);
       }
     } catch (e) {
       console.warn('[Sarvam Voice Engine] STT API call error:', e);

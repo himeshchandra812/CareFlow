@@ -117,5 +117,15 @@ export const api = {
     fetchJson(`${API_BASE}/ai/intent`, {
       method: 'POST',
       body: JSON.stringify({ text, message: text, language, context })
+    }),
+
+  sendSarvamVoice: (
+    audioBase64: string,
+    language: SupportedLanguage = 'en',
+    context?: Record<string, any>
+  ): Promise<SarvamIntentResponse & { transcript: string }> =>
+    fetchJson(`${API_BASE}/ai/voice`, {
+      method: 'POST',
+      body: JSON.stringify({ audioBase64, language, context })
     })
 };

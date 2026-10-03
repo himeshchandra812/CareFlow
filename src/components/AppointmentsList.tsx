@@ -21,8 +21,8 @@ interface AppointmentsListProps {
   appointments: Appointment[];
   currentLang: SupportedLanguage;
   onTrackQueue: (appt: Appointment) => void;
-  onGetDirections: (deptId: string) => void;
-  onViewPreparation: (deptId: string) => void;
+  onGetDirections: (deptId: string, apptId: string) => void;
+  onViewPreparation: (deptId: string, apptId: string) => void;
   onReschedule: (appt: Appointment) => void;
   onCancel: (appt: Appointment) => void;
   onBookNew: () => void;
@@ -236,13 +236,13 @@ export const AppointmentsList: React.FC<AppointmentsListProps> = ({
                         Track Queue
                       </button>
                       <button
-                        onClick={() => onGetDirections(appt.departmentId)}
+                        onClick={() => onGetDirections(appt.departmentId, appt._id)}
                         className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
                       >
                         Directions
                       </button>
                       <button
-                        onClick={() => onViewPreparation(appt.departmentId)}
+                        onClick={() => onViewPreparation(appt.departmentId, appt._id)}
                         className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
                       >
                         Prep Info

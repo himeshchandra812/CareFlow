@@ -68,6 +68,7 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
 
   // Modals & Selection States
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [selectedDoctorForProfile, setSelectedDoctorForProfile] = useState<Doctor | null>(null);
   const [selectedDoctorForBooking, setSelectedDoctorForBooking] = useState<Doctor | null>(null);
   const [lastBookedResult, setLastBookedResult] = useState<{ appointment: Appointment; queue: QueueState } | null>(null);
@@ -115,6 +116,7 @@ export default function App() {
   };
 
   const activeAppointment =
+    appointments.find((a) => a._id === selectedAppointmentId) ||
     appointments.find(
       (a) => a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress'
     ) ||
@@ -148,14 +150,23 @@ export default function App() {
     }
     // 3. view_appointment
     else if (result.intent === 'view_appointment') {
+      if (result.extractedParams?.appointment) {
+        setSelectedAppointmentId(result.extractedParams.appointment._id || result.extractedParams.appointment.id);
+      }
       setCurrentTab('appointments');
     }
     // 4. check_queue
     else if (result.intent === 'check_queue') {
+      if (result.extractedParams?.appointment) {
+        setSelectedAppointmentId(result.extractedParams.appointment._id || result.extractedParams.appointment.id);
+      }
       setCurrentTab('queue');
     }
     // 5. navigate_hospital
     else if (result.intent === 'navigate_hospital') {
+      if (result.extractedParams?.appointment) {
+        setSelectedAppointmentId(result.extractedParams.appointment._id || result.extractedParams.appointment.id);
+      }
       if (result.department) {
         const found = departments.find(
           (d) => d.name.toLowerCase() === result.department?.toLowerCase()
@@ -166,13 +177,19 @@ export default function App() {
     }
     // 6. appointment_preparation
     else if (result.intent === 'appointment_preparation') {
+      let resolvedAppt = activeAppointment;
+      if (result.extractedParams?.appointment) {
+        const apptId = result.extractedParams.appointment._id || result.extractedParams.appointment.id;
+        setSelectedAppointmentId(apptId);
+        resolvedAppt = appointments.find(a => a._id === apptId) || activeAppointment;
+      }
       if (result.department) {
         const found = departments.find(
           (d) => d.name.toLowerCase() === result.department?.toLowerCase()
         );
         if (found) setPreparationDept(found);
-      } else if (activeAppointment) {
-        const found = departments.find((d) => d._id === activeAppointment.departmentId);
+      } else if (resolvedAppt) {
+        const found = departments.find((d) => d._id === resolvedAppt.departmentId);
         if (found) setPreparationDept(found);
       }
     }
@@ -186,11 +203,16 @@ export default function App() {
     }
     // 8. cancel_appointment
     else if (result.intent === 'cancel_appointment') {
-      if (activeAppointment) {
+      const resolvedApptId = result.extractedParams?.appointment?._id || result.extractedParams?.appointment?.id || result.extractedParams?.appointment?.id;
+      const targetAppt = resolvedApptId
+        ? (appointments.find(a => a._id === resolvedApptId) || activeAppointment)
+        : activeAppointment;
+
+      if (targetAppt) {
         if (confirmAction) {
           try {
             await api.updateAppointmentStatus(
-              activeAppointment._id,
+              targetAppt._id,
               'cancelled',
               'Cancelled via Voice Assistant'
             );
@@ -201,7 +223,7 @@ export default function App() {
             showToast('Unable to cancel the appointment. Please try again.', 'error');
           }
         } else {
-          setCancelTarget(activeAppointment);
+          setCancelTarget(targetAppt);
         }
       } else {
         setCurrentTab('appointments');
@@ -209,8 +231,13 @@ export default function App() {
     }
     // 9. reschedule_appointment
     else if (result.intent === 'reschedule_appointment') {
-      if (activeAppointment) {
-        setRescheduleTarget(activeAppointment);
+      const resolvedApptId = result.extractedParams?.appointment?._id || result.extractedParams?.appointment?.id;
+      const targetAppt = resolvedApptId
+        ? (appointments.find(a => a._id === resolvedApptId) || activeAppointment)
+        : activeAppointment;
+
+      if (targetAppt) {
+        setRescheduleTarget(targetAppt);
       } else {
         setCurrentTab('appointments');
       }
@@ -288,17 +315,23 @@ export default function App() {
               <SeniorModeHome
                 currentLang={currentLang}
                 activeAppointment={activeAppointment}
+                appointments={appointments}
                 onNavigate={(tab) => setCurrentTab(tab)}
                 onOpenVoice={() => setIsVoiceOpen(true)}
                 onAppointmentUpdate={fetchAllData}
+                onSelectAppointmentId={setSelectedAppointmentId}
               />
             ) : (
               <HomeDashboard
                 currentLang={currentLang}
                 activeAppointment={activeAppointment}
+                appointments={appointments}
                 departments={departments}
                 onNavigate={(tab, extra) => {
                   if (tab === 'preparation') {
+                    if (extra?.appointmentId) {
+                      setSelectedAppointmentId(extra.appointmentId);
+                    }
                     if (extra?.departmentId) {
                       const dept = departments.find(d => d._id === extra.departmentId);
                       if (dept) setPreparationDept(dept);
@@ -309,6 +342,7 @@ export default function App() {
                   } else {
                     if (extra?.search) setSearchFilter(extra.search);
                     if (extra?.departmentId) setMapTargetDeptId(extra.departmentId);
+                    if (extra?.appointmentId) setSelectedAppointmentId(extra.appointmentId);
                     setCurrentTab(tab);
                   }
                 }}
@@ -318,6 +352,7 @@ export default function App() {
                   setCurrentTab('doctors');
                 }}
                 onAppointmentUpdate={fetchAllData}
+                onSelectAppointmentId={setSelectedAppointmentId}
               />
             )
           )}
@@ -353,12 +388,17 @@ export default function App() {
             <AppointmentsList
               appointments={appointments}
               currentLang={currentLang}
-              onTrackQueue={() => setCurrentTab('queue')}
-              onGetDirections={(deptId) => {
+              onTrackQueue={(appt) => {
+                setSelectedAppointmentId(appt._id);
+                setCurrentTab('queue');
+              }}
+              onGetDirections={(deptId, apptId) => {
+                if (apptId) setSelectedAppointmentId(apptId);
                 setMapTargetDeptId(deptId);
                 setCurrentTab('map');
               }}
-              onViewPreparation={(deptId) => {
+              onViewPreparation={(deptId, apptId) => {
+                if (apptId) setSelectedAppointmentId(apptId);
                 const dept = departments.find(d => d._id === deptId);
                 if (dept) setPreparationDept(dept);
               }}

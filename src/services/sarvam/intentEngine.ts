@@ -205,6 +205,87 @@ function parseMultilingualRuleEngine(
   return { intent: 'help' };
 }
 
+function findMatchingAppointment(
+  appts: Appointment[],
+  deptName?: string,
+  doctorName?: string
+): Appointment | 'ambiguous' | null {
+  const activeAppts = appts.filter(
+    (a) => a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress'
+  );
+
+  if (activeAppts.length === 0) return null;
+
+  let filtered = activeAppts;
+
+  // Filter by doctor name if mentioned
+  if (doctorName) {
+    const docClean = doctorName.toLowerCase().replace(/dr\.?\s+/g, '').trim();
+    if (docClean) {
+      filtered = filtered.filter((a) => a.doctorName.toLowerCase().includes(docClean));
+    }
+  }
+
+  // Filter by department if mentioned
+  if (deptName) {
+    const deptClean = deptName.toLowerCase().trim();
+    // Only filter if not the default "Cardiology" or if department was explicitly in raw
+    if (deptClean && deptClean !== 'cardiology') {
+      filtered = filtered.filter(
+        (a) =>
+          a.departmentName.toLowerCase().includes(deptClean) ||
+          a.departmentId.toLowerCase().includes(deptClean)
+      );
+    }
+  }
+
+  if (filtered.length === 1) {
+    return filtered[0];
+  }
+
+  if (filtered.length > 1) {
+    return 'ambiguous';
+  }
+
+  if (activeAppts.length === 1) {
+    return activeAppts[0];
+  }
+
+  return 'ambiguous';
+}
+
+function getClarificationResponse(
+  intent: ValidIntent,
+  options: Appointment[],
+  lang: SupportedLanguage
+): SarvamIntentResponse {
+  let textResp = '';
+  if (lang === 'hi') {
+    textResp = `आपके पास एक से अधिक अपॉइंटमेंट हैं। क्या आपका मतलब Dr. ${options[0].doctorName} (${options[0].departmentName}) के साथ या Dr. ${options[1]?.doctorName || ''} (${options[1]?.departmentName || ''}) के साथ अपॉइंटमेंट से है?`;
+  } else if (lang === 'te') {
+    textResp = `మీకు ఒకటి కంటే ఎక్కువ అపాయింట్‌మెంట్‌లు ఉన్నాయి. మీ ఉద్దేశ్యం Dr. ${options[0].doctorName} (${options[0].departmentName}) తో ఉన్నదా, లేదా Dr. ${options[1]?.doctorName || ''} (${options[1]?.departmentName || ''}) తో ఉన్నదా?`;
+  } else {
+    textResp = `You have multiple upcoming appointments. Do you mean your ${options[0].departmentName} appointment with Dr. ${options[0].doctorName} on ${options[0].appointmentDate}, or your ${options[1]?.departmentName || ''} appointment with Dr. ${options[1]?.doctorName || ''} on ${options[1]?.appointmentDate || ''}?`;
+  }
+
+  return {
+    intent,
+    language: lang,
+    responseText: textResp,
+    extractedParams: {
+      requiresClarification: true,
+      options: options.map((o) => ({
+        id: o._id,
+        doctorName: o.doctorName,
+        departmentName: o.departmentName,
+        appointmentDate: o.appointmentDate,
+        appointmentTime: o.appointmentTime,
+        tokenNumber: o.tokenNumber
+      }))
+    }
+  };
+}
+
 async function validateAndExecuteIntent(
   raw: any,
   lang: SupportedLanguage,
@@ -269,9 +350,14 @@ async function validateAndExecuteIntent(
   // 3. View Appointment Intent
   if (intent === 'view_appointment') {
     const appts = await getAppointments();
-    const activeApp =
-      appts.find((a) => a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress') ||
-      appts[0];
+    const matched = findMatchingAppointment(appts, raw.department, raw.doctorName);
+
+    if (matched === 'ambiguous') {
+      const activeAppts = appts.filter(a => a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress');
+      return getClarificationResponse('view_appointment', activeAppts, lang);
+    }
+
+    const activeApp = matched || appts[0];
 
     if (activeApp) {
       return {
@@ -292,9 +378,14 @@ async function validateAndExecuteIntent(
   // 4. Queue Check Intent
   if (intent === 'check_queue') {
     const appts = await getAppointments();
-    const activeApp =
-      appts.find((a) => a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress' || a.status === 'confirmed') ||
-      appts[0];
+    const matched = findMatchingAppointment(appts, raw.department, raw.doctorName);
+
+    if (matched === 'ambiguous') {
+      const activeAppts = appts.filter(a => a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress');
+      return getClarificationResponse('check_queue', activeAppts, lang);
+    }
+
+    const activeApp = matched || appts[0];
 
     if (activeApp) {
       const q = await getQueueByAppointmentId(activeApp._id);
@@ -324,29 +415,45 @@ async function validateAndExecuteIntent(
 
   // 5. Hospital Navigation Intent
   if (intent === 'navigate_hospital') {
-    const navs = await getHospitalNavigation(deptName);
+    const appts = await getAppointments();
+    const matched = findMatchingAppointment(appts, raw.department, raw.doctorName);
+    
+    let resolvedDeptName = deptName;
+    if (matched && matched !== 'ambiguous') {
+      resolvedDeptName = matched.departmentName;
+    }
+
+    const navs = await getHospitalNavigation(resolvedDeptName);
     const loc = navs[0];
 
     return {
       intent: 'navigate_hospital',
-      department: deptName,
+      department: resolvedDeptName,
       language: lang,
-      responseText: `${deptName} Department is located at ${loc ? `${loc.block}, ${loc.floor}, ${loc.roomNumber}` : 'Block B, 2nd Floor (Wing East)'}. Follow the digital hospital wayfinding map.`,
-      extractedParams: { location: loc, departmentName: deptName }
+      responseText: `${resolvedDeptName} Department is located at ${loc ? `${loc.block}, ${loc.floor}, ${loc.roomNumber}` : 'Block B, 2nd Floor (Wing East)'}. Follow the digital hospital wayfinding map.`,
+      extractedParams: { location: loc, departmentName: resolvedDeptName, appointment: matched && matched !== 'ambiguous' ? matched : undefined }
     };
   }
 
   // 6. Appointment Preparation Intent
   if (intent === 'appointment_preparation') {
+    const appts = await getAppointments();
+    const matched = findMatchingAppointment(appts, raw.department, raw.doctorName);
+
+    let resolvedDeptName = deptName;
+    if (matched && matched !== 'ambiguous') {
+      resolvedDeptName = matched.departmentName;
+    }
+
     const depts = await getDepartments();
-    const target = depts.find((d) => d.name.toLowerCase() === deptName.toLowerCase()) || depts[0];
+    const target = depts.find((d) => d.name.toLowerCase() === resolvedDeptName.toLowerCase()) || depts[0];
 
     return {
       intent: 'appointment_preparation',
       department: target.name,
       language: lang,
       responseText: `Before your ${target.name} appointment: Please bring previous medical reports, daily prescriptions, and photo ID. ${target.preparationInstructions.join(' ')}`,
-      extractedParams: { instructions: target.preparationInstructions, department: target }
+      extractedParams: { instructions: target.preparationInstructions, department: target, appointment: matched && matched !== 'ambiguous' ? matched : undefined }
     };
   }
 
@@ -368,7 +475,14 @@ async function validateAndExecuteIntent(
   // 8. Cancellation with Confirmation
   if (intent === 'cancel_appointment') {
     const appts = await getAppointments();
-    const activeApp = appts.find((a) => a.status === 'confirmed' || a.status === 'waiting' || a.status === 'arrived');
+    const matched = findMatchingAppointment(appts, raw.department, raw.doctorName);
+
+    if (matched === 'ambiguous') {
+      const activeAppts = appts.filter(a => a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress');
+      return getClarificationResponse('cancel_appointment', activeAppts, lang);
+    }
+
+    const activeApp = matched;
 
     return {
       intent: 'cancel_appointment',
@@ -383,7 +497,14 @@ async function validateAndExecuteIntent(
   // 9. Reschedule with Confirmation
   if (intent === 'reschedule_appointment') {
     const appts = await getAppointments();
-    const activeApp = appts.find((a) => a.status === 'confirmed' || a.status === 'waiting' || a.status === 'arrived');
+    const matched = findMatchingAppointment(appts, raw.department, raw.doctorName);
+
+    if (matched === 'ambiguous') {
+      const activeAppts = appts.filter(a => a.status === 'confirmed' || a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress');
+      return getClarificationResponse('reschedule_appointment', activeAppts, lang);
+    }
+
+    const activeApp = matched;
 
     return {
       intent: 'reschedule_appointment',

@@ -1,4 +1,5 @@
 import { MongoClient, Db } from 'mongodb';
+import crypto from 'crypto';
 import {
   SEED_DEPARTMENTS,
   SEED_DOCTORS,
@@ -6,7 +7,8 @@ import {
   SEED_HOSPITAL_LOCATIONS,
   SEED_PATIENTS,
   SEED_APPOINTMENTS,
-  SEED_QUEUES
+  SEED_QUEUES,
+  SEED_USERS
 } from './seedData.js';
 import {
   Doctor,
@@ -16,6 +18,8 @@ import {
   Appointment,
   QueueState,
   Patient,
+  User,
+  UserRole,
   VisitType,
   VisitTypeSource,
   VisitTypeDetectionResult,
@@ -41,7 +45,8 @@ const inMemoryStore = {
   patients: [...SEED_PATIENTS] as Patient[],
   appointments: [...SEED_APPOINTMENTS] as Appointment[],
   queues: [...SEED_QUEUES] as QueueState[],
-  hospitalLocations: [...SEED_HOSPITAL_LOCATIONS] as HospitalLocation[]
+  hospitalLocations: [...SEED_HOSPITAL_LOCATIONS] as HospitalLocation[],
+  users: [...SEED_USERS] as User[]
 };
 
 /**
@@ -113,6 +118,7 @@ async function initializeCollections(db: Db) {
       await db.collection<any>('appointments').insertMany(SEED_APPOINTMENTS);
       await db.collection<any>('queues').insertMany(SEED_QUEUES);
       await db.collection<any>('hospital_locations').insertMany(SEED_HOSPITAL_LOCATIONS);
+      await db.collection<any>('users').insertMany(SEED_USERS);
       console.log('[CareFlow DB] MongoDB Atlas collections initialized successfully.');
     } else {
       // Ensure unique profile images are synchronized
@@ -313,11 +319,20 @@ export async function updatePatient(id: string, updates: Partial<Patient>): Prom
   return getPatientById(id);
 }
 
-export async function getAppointments(patientId?: string): Promise<Appointment[]> {
+export async function getAppointments(params?: { patientId?: string; doctorId?: string; role?: string } | string): Promise<Appointment[]> {
   const db = await connectToDatabase();
   let apps: Appointment[] = [];
+  const p = typeof params === 'string' ? { patientId: params } : params;
+
   if (db) {
-    const query = patientId ? { patientId } : {};
+    const query: any = {};
+    if (p?.role === 'doctor' && p?.doctorId) {
+      query.doctorId = p.doctorId;
+    } else if (p?.role === 'patient' && p?.patientId) {
+      query.patientId = p.patientId;
+    } else if (p?.patientId) {
+      query.patientId = p.patientId;
+    }
     apps = await db
       .collection<Appointment>('appointments')
       .find(query)
@@ -325,8 +340,12 @@ export async function getAppointments(patientId?: string): Promise<Appointment[]
       .toArray();
   } else {
     apps = [...inMemoryStore.appointments];
-    if (patientId) {
-      apps = apps.filter((a) => a.patientId === patientId);
+    if (p?.role === 'doctor' && p?.doctorId) {
+      apps = apps.filter((a) => a.doctorId === p.doctorId);
+    } else if (p?.role === 'patient' && p?.patientId) {
+      apps = apps.filter((a) => a.patientId === p.patientId);
+    } else if (p?.patientId) {
+      apps = apps.filter((a) => a.patientId === p.patientId);
     }
   }
 
@@ -842,3 +861,96 @@ export async function getHospitalNavigation(departmentId?: string): Promise<Hosp
   }
   return list;
 }
+
+// ----------------------------------------------------
+// USERS & AUTHENTICATION COLLECTION
+// ----------------------------------------------------
+
+export function hashPassword(password: string): string {
+  return crypto.createHash('sha256').update(password || '').digest('hex');
+}
+
+export async function getUserByEmail(email: string): Promise<User | null> {
+  if (!email) return null;
+  const lowerEmail = email.toLowerCase().trim();
+  const db = await connectToDatabase();
+  if (db) {
+    const user = await db.collection<User>('users').findOne({ email: { $regex: `^${lowerEmail}$`, $options: 'i' } });
+    if (user) return user;
+  }
+  return inMemoryStore.users.find((u) => u.email.toLowerCase() === lowerEmail) || null;
+}
+
+export async function getUserById(id: string): Promise<User | null> {
+  if (!id) return null;
+  const db = await connectToDatabase();
+  if (db) {
+    const user = await db.collection<User>('users').findOne({ _id: id as any });
+    if (user) return user;
+  }
+  return inMemoryStore.users.find((u) => u._id === id) || null;
+}
+
+export async function createUser(data: {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  role?: UserRole;
+  accessibilityMode?: boolean;
+}): Promise<User> {
+  const db = await connectToDatabase();
+  const normalizedPhone = normalizePhoneNumber(data.phone || '');
+  const passwordHash = hashPassword(data.password || 'demo123');
+  const role = data.role || 'patient';
+
+  const newUser: User = {
+    _id: `usr_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    name: data.name.trim(),
+    email: data.email.toLowerCase().trim(),
+    phone: normalizedPhone,
+    passwordHash,
+    role,
+    accessibilityMode: !!data.accessibilityMode,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (role === 'patient') {
+    const newPatient: Patient = {
+      _id: `pat_${newUser._id}`,
+      name: newUser.name,
+      age: 35,
+      phone: newUser.phone,
+      email: newUser.email,
+      preferredLanguage: 'en',
+      accessibilityMode: newUser.accessibilityMode || false,
+      createdAt: newUser.createdAt,
+      updatedAt: newUser.updatedAt
+    };
+    if (db) {
+      await db.collection<Patient>('patients').insertOne(newPatient);
+    } else {
+      inMemoryStore.patients.unshift(newPatient);
+    }
+  }
+
+  if (db) {
+    await db.collection<User>('users').insertOne(newUser);
+  } else {
+    inMemoryStore.users.unshift(newUser);
+  }
+
+  return newUser;
+}
+
+export async function verifyUserPassword(email: string, password: string): Promise<User | null> {
+  const user = await getUserByEmail(email);
+  if (!user || !user.passwordHash) return null;
+  const hashedInput = hashPassword(password);
+  if (user.passwordHash === hashedInput) {
+    return user;
+  }
+  return null;
+}
+

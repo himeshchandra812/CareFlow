@@ -16,7 +16,7 @@ import {
   FileCheck,
   CheckCircle2
 } from 'lucide-react';
-import { SupportedLanguage, Appointment, Department } from '../types/index.js';
+import { SupportedLanguage, Appointment, Department, QueueState } from '../types/index.js';
 import { QueueCard } from './QueueCard.js';
 import { t } from '../services/i18n.js';
 import { useViewport } from '../hooks/useViewport.js';
@@ -31,6 +31,7 @@ interface HomeDashboardProps {
   onSelectDepartment: (deptId: string) => void;
   onAppointmentUpdate?: () => void;
   onSelectAppointmentId?: (apptId: string) => void;
+  queueState?: QueueState | null;
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
@@ -42,7 +43,8 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
   onOpenVoice,
   onSelectDepartment,
   onAppointmentUpdate,
-  onSelectAppointmentId
+  onSelectAppointmentId,
+  queueState
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { isMobile, isTablet, isDesktop, isUltrawide, isShortViewport } = useViewport();
@@ -151,7 +153,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
               <QueueCard
                 appointment={activeAppointment}
-                queueState={{
+                queueState={queueState || {
                   _id: `queue_${activeAppointment._id}`,
                   appointmentId: activeAppointment._id,
                   doctorId: activeAppointment.doctorId,
@@ -161,7 +163,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                   currentToken: 'A-119',
                   patientToken: activeAppointment.tokenNumber,
                   patientsAhead: 8,
-                  estimatedWaitTime: activeAppointment.estimatedWaitTime,
+                  estimatedWaitTime: activeAppointment.estimatedWaitTime || 24,
                   doctorStatus: 'Consulting',
                   doctorStatusMessage: `${activeAppointment.doctorName} is currently consulting Token A-119.`,
                   averageConsultationMinutes: 3,

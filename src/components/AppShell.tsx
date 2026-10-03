@@ -11,9 +11,11 @@ import {
   Accessibility,
   Home,
   Building2,
-  UserCheck
+  UserCheck,
+  LogOut,
+  Sparkles
 } from 'lucide-react';
-import { SupportedLanguage } from '../types/index.js';
+import { SupportedLanguage, User } from '../types/index.js';
 import { LANGUAGES, t } from '../services/i18n.js';
 import { useViewport } from '../hooks/useViewport.js';
 
@@ -25,6 +27,9 @@ interface AppShellProps {
   currentLang: SupportedLanguage;
   onLangChange: (lang: SupportedLanguage) => void;
   onOpenVoice: () => void;
+  currentUser?: User | null;
+  onLogout?: () => void;
+  onSwitchRole?: () => void;
   children: React.ReactNode;
 }
 
@@ -36,6 +41,9 @@ export const AppShell: React.FC<AppShellProps> = ({
   currentLang,
   onLangChange,
   onOpenVoice,
+  currentUser,
+  onLogout,
+  onSwitchRole,
   children
 }) => {
   const { width, isMobile, isTablet, isDesktop, isUltrawide, isShortViewport } = useViewport();
@@ -49,6 +57,10 @@ export const AppShell: React.FC<AppShellProps> = ({
     { id: 'map', label: t('map', currentLang), icon: MapPin },
     { id: 'help', label: t('help', currentLang), icon: HelpCircle }
   ];
+
+  const initials = currentUser?.name
+    ? currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'RC';
 
   return (
     <div className={`min-h-screen flex flex-col bg-slate-50 text-slate-900 ${seniorMode ? 'senior-mode' : ''}`}>
@@ -140,12 +152,40 @@ export const AppShell: React.FC<AppShellProps> = ({
               <span className="hidden xs:inline">{t('speak', currentLang)}</span>
             </button>
 
-            {/* Patient Profile Menu Indicator */}
-            <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center font-outfit shadow-xs">
-                RK
+            {/* User Profile / Logout / Switch Role Chip */}
+            {currentUser && (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-8 h-8 rounded-full bg-teal-700 text-white font-bold text-xs flex items-center justify-center font-outfit shadow-xs" title={currentUser.name}>
+                    {initials}
+                  </div>
+                  <div className="hidden xl:block text-left text-xs">
+                    <div className="font-bold text-slate-800 truncate max-w-[100px]">{currentUser.name}</div>
+                    <div className="text-[10px] text-teal-700 font-semibold uppercase">{currentUser.role}</div>
+                  </div>
+                </div>
+
+                {onSwitchRole && (
+                  <button
+                    onClick={onSwitchRole}
+                    className="p-1.5 text-slate-600 hover:text-teal-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                    title="Switch Demo Role"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </button>
+                )}
+
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       </header>

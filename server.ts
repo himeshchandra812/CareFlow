@@ -25,7 +25,11 @@ import {
   getPatientByPhone,
   getPatientById,
   createPatient,
-  updatePatient
+  updatePatient,
+  getUserByEmail,
+  getUserById,
+  createUser,
+  verifyUserPassword
 } from './src/db/mongo.js';
 import { processSarvamNLU } from './src/services/sarvam/intentEngine.js';
 import { processSarvamSTT } from './src/services/sarvam/voiceEngine.js';
@@ -60,6 +64,66 @@ app.get('/api/health', async (_req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ status: 'error', error: 'Health check failed' });
+  }
+});
+
+// Authentication Endpoints
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const user = await verifyUserPassword(email, password);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    const { passwordHash, ...safeUser } = user;
+    res.json({ user: safeUser, token: `token_${user._id}_${Date.now()}` });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Login failed' });
+  }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, phone, password, role, accessibilityMode } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+    const existing = await getUserByEmail(email);
+    if (existing) {
+      return res.status(400).json({ error: 'An account with this email already exists' });
+    }
+    const newUser = await createUser({
+      name,
+      email,
+      phone: phone || '+919876543210',
+      password,
+      role: role || 'patient',
+      accessibilityMode
+    });
+    const { passwordHash, ...safeUser } = newUser;
+    res.status(201).json({ user: safeUser, token: `token_${newUser._id}_${Date.now()}` });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Registration failed' });
+  }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const { passwordHash, ...safeUser } = user;
+    res.json({ user: safeUser });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to authenticate session' });
   }
 });
 
@@ -125,8 +189,36 @@ app.get('/api/appointments/detect-visit-type', async (req, res) => {
 
 app.get('/api/appointments', async (req, res) => {
   try {
-    const patientId = req.query.patientId as string || 'pat_rajesh_kumar';
-    const apps = await getAppointments(patientId);
+    const role = req.headers['x-user-role'] as string || req.query.role as string;
+    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
+    const patientIdParam = req.query.patientId as string;
+
+    let filterParams: { patientId?: string; doctorId?: string; role?: string } = {};
+
+    if (role === 'patient') {
+      filterParams.role = 'patient';
+      filterParams.patientId = patientIdParam || (userId === 'user_patient_1' ? 'pat_rajesh_kumar' : `pat_${userId}`);
+    } else if (role === 'doctor') {
+      filterParams.role = 'doctor';
+      const user = userId ? await getUserById(userId) : null;
+      if (user) {
+        const doctors = await getDoctors();
+        const matchedDoc = doctors.find(d => d.name.toLowerCase() === user.name.toLowerCase() || d._id === user._id || d.departmentId === user.departmentId);
+        if (matchedDoc) {
+          filterParams.doctorId = matchedDoc._id;
+        } else {
+          filterParams.doctorId = 'doc_anil_sharma';
+        }
+      } else {
+        filterParams.doctorId = 'doc_anil_sharma';
+      }
+    } else if (role === 'staff' || role === 'hospital_admin') {
+      filterParams.role = role;
+    } else {
+      filterParams.patientId = patientIdParam || 'pat_rajesh_kumar';
+    }
+
+    const apps = await getAppointments(filterParams as any);
     res.json(apps);
   } catch (e: any) {
     res.status(500).json({ error: "We couldn't load your appointments right now. Please try again." });

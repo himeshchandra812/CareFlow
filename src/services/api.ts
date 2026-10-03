@@ -12,13 +12,24 @@ import {
   VisitType,
   VisitTypeSource
 } from '../types/index.js';
+import { authService } from './auth.js';
 
 const API_BASE = '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const user = authService.getCurrentUser();
+  const defaultHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (user) {
+    defaultHeaders['x-user-id'] = user._id;
+    defaultHeaders['x-user-role'] = user.role;
+  }
+
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
+    ...options,
+    headers: {
+      ...defaultHeaders,
+      ...(options?.headers || {})
+    }
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Network error' }));

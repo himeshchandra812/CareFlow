@@ -1,4 +1,4 @@
-import { Hospital, Department, Doctor, HospitalLocation, Appointment, QueueState, Patient } from '../types/index.js';
+import { Hospital, Department, Doctor, HospitalLocation, Appointment, QueueState, Patient, User } from '../types/index.js';
 
 export const SEED_HOSPITAL: Hospital = {
   _id: 'hosp_careflow_01',
@@ -479,5 +479,82 @@ export const SEED_HOSPITAL_LOCATIONS: HospitalLocation[] = [
     ],
     landmarks: ['Adjacent to X-Ray & Imaging Wing'],
     walkingTimeMinutes: 3
+  }
+];
+
+export const SEED_USERS: User[] = [
+  {
+    _id: 'user_patient_1',
+    name: 'Rajesh Kumar',
+    email: 'patient.demo@careflow.app',
+    phone: '+919876543210',
+    passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
+    role: 'patient',
+    accessibilityMode: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    _id: 'user_patient_2',
+    name: 'Priya Patel',
+    email: 'patient2.demo@careflow.app',
+    phone: '+919811122233',
+    passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
+    role: 'patient',
+    accessibilityMode: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    _id: 'user_doctor_1',
+    name: 'Dr. Anil Sharma',
+    email: 'doctor.demo@careflow.app',
+    phone: '+919822233344',
+    passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
+    role: 'doctor',
+    specialization: 'Senior Cardiologist',
+    departmentId: 'dept_cardiology',
+    departmentName: 'Cardiology',
+    hospitalId: 'hosp_careflow_01',
+    profileImage: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=300&auto=format&fit=crop',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    _id: 'user_doctor_2',
+    name: 'Dr. Priya Nair',
+    email: 'doctor2.demo@careflow.app',
+    phone: '+919833344455',
+    passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
+    role: 'doctor',
+    specialization: 'Orthopedic Surgeon',
+    departmentId: 'dept_orthopedics',
+    departmentName: 'Orthopedics',
+    hospitalId: 'hosp_careflow_01',
+    profileImage: 'https://images.unsplash.com/photo-1594824813575-236b2809d8d6?q=80&w=300&auto=format&fit=crop',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    _id: 'user_staff_1',
+    name: 'EMT Staff Operator',
+    email: 'staff.demo@careflow.app',
+    phone: '+919844455566',
+    passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
+    role: 'staff',
+    hospitalId: 'hosp_careflow_01',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    _id: 'user_admin_1',
+    name: 'Hospital Admin Director',
+    email: 'admin.demo@careflow.app',
+    phone: '+919855566677',
+    passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
+    role: 'hospital_admin',
+    hospitalId: 'hosp_careflow_01',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   }
 ];

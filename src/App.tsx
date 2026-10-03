@@ -23,11 +23,18 @@ import {
   Appointment,
   QueueState,
   SupportedLanguage,
-  SarvamIntentResponse
+  SarvamIntentResponse,
+  User
 } from './types/index.js';
 import { api } from './services/api.js';
+import { authService } from './services/auth.js';
+import { AuthScreen } from './components/AuthScreen.js';
+import { DoctorDashboard } from './components/DoctorDashboard.js';
+import { StaffDashboard } from './components/StaffDashboard.js';
+import { AdminDashboard } from './components/AdminDashboard.js';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
   const [currentTab, setCurrentTab] = useState<string>('home');
   const [seniorMode, setSeniorMode] = useState<boolean>(() => {
     try {
@@ -248,6 +255,61 @@ export default function App() {
     }
   };
 
+  if (!currentUser) {
+    return <AuthScreen onLoginSuccess={(u) => setCurrentUser(u)} />;
+  }
+
+  if (currentUser.role === 'doctor') {
+    return (
+      <DoctorDashboard
+        currentUser={currentUser}
+        onLogout={() => {
+          authService.clearSession();
+          setCurrentUser(null);
+        }}
+        onSwitchRole={() => {
+          authService.clearSession();
+          setCurrentUser(null);
+        }}
+        showToast={showToast}
+      />
+    );
+  }
+
+  if (currentUser.role === 'staff') {
+    return (
+      <StaffDashboard
+        currentUser={currentUser}
+        onLogout={() => {
+          authService.clearSession();
+          setCurrentUser(null);
+        }}
+        onSwitchRole={() => {
+          authService.clearSession();
+          setCurrentUser(null);
+        }}
+        showToast={showToast}
+      />
+    );
+  }
+
+  if (currentUser.role === 'hospital_admin') {
+    return (
+      <AdminDashboard
+        currentUser={currentUser}
+        onLogout={() => {
+          authService.clearSession();
+          setCurrentUser(null);
+        }}
+        onSwitchRole={() => {
+          authService.clearSession();
+          setCurrentUser(null);
+        }}
+        showToast={showToast}
+      />
+    );
+  }
+
   return (
     <AppShell
       currentTab={currentTab}
@@ -260,6 +322,15 @@ export default function App() {
       currentLang={currentLang}
       onLangChange={handleLangChange}
       onOpenVoice={() => setIsVoiceOpen(true)}
+      currentUser={currentUser}
+      onLogout={() => {
+        authService.clearSession();
+        setCurrentUser(null);
+      }}
+      onSwitchRole={() => {
+        authService.clearSession();
+        setCurrentUser(null);
+      }}
     >
       {/* Preparation Card View Override */}
       {preparationDept ? (

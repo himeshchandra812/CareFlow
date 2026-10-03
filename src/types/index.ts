@@ -178,6 +178,25 @@ export interface HospitalLocation {
   walkingTimeMinutes: number;
 }
 
+export type UserRole = 'patient' | 'doctor' | 'staff' | 'hospital_admin';
+
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  passwordHash?: string;
+  role: UserRole;
+  profileImage?: string;
+  specialization?: string;
+  departmentId?: string;
+  departmentName?: string;
+  hospitalId?: string;
+  accessibilityMode?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type SarvamIntentType =
   | 'find_doctor'
   | 'find_department'

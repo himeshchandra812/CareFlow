@@ -270,6 +270,31 @@ export const QueueTracker: React.FC<QueueTrackerProps> = ({
             <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${refreshing ? 'animate-spin' : ''}`} />
             <span>{refreshing ? 'Updating...' : 'Refresh'}</span>
           </button>
+
+          {isArrived && (
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                try {
+                  const updatedQueue = await api.advanceQueue(activeAppointment._id);
+                  setQueue(updatedQueue);
+                  setLastUpdatedTime(new Date());
+                  setSecondsAgo(0);
+                  onAppointmentUpdate?.();
+                } catch (err) {
+                  console.warn('Simulation error:', err);
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl transition-colors cursor-pointer min-h-[44px] shadow-2xs"
+              title="Simulate the doctor calling the next patient token"
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              <span>Simulate Call Next</span>
+            </button>
+          )}
         </div>
       </div>
 

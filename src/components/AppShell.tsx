@@ -19,6 +19,12 @@ import { SupportedLanguage, User } from '../types/index.js';
 import { LANGUAGES, t } from '../services/i18n.js';
 import { useViewport } from '../hooks/useViewport.js';
 
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: any;
+}
+
 interface AppShellProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
@@ -30,6 +36,7 @@ interface AppShellProps {
   currentUser?: User | null;
   onLogout?: () => void;
   onSwitchRole?: () => void;
+  navItems?: NavItem[];
   children: React.ReactNode;
 }
 
@@ -44,11 +51,12 @@ export const AppShell: React.FC<AppShellProps> = ({
   currentUser,
   onLogout,
   onSwitchRole,
+  navItems,
   children
 }) => {
   const { width, isMobile, isTablet, isDesktop, isUltrawide, isShortViewport } = useViewport();
 
-  const navItems = [
+  const defaultNavItems = [
     { id: 'home', label: t('home', currentLang), icon: Home },
     { id: 'doctors', label: t('doctors', currentLang), icon: Search },
     { id: 'departments', label: 'Departments', icon: Building2 },
@@ -57,6 +65,8 @@ export const AppShell: React.FC<AppShellProps> = ({
     { id: 'map', label: t('map', currentLang), icon: MapPin },
     { id: 'help', label: t('help', currentLang), icon: HelpCircle }
   ];
+
+  const activeNavItems = navItems || defaultNavItems;
 
   const initials = currentUser?.name
     ? currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
@@ -88,7 +98,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
           {/* Zone 2: Navigation Links (Desktop & Tablet Landscape) */}
           <nav className="hidden md:flex items-center gap-0.5 lg:gap-1.5 overflow-x-auto">
-            {navItems.map((item) => {
+            {activeNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
               return (
@@ -197,7 +207,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
       {/* Mobile Bottom Navigation Bar with Safe Area Support */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-2 pt-1.5 safe-area-bottom-padding flex items-center justify-around">
-        {navItems.slice(0, 5).map((item) => {
+        {activeNavItems.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
           return (

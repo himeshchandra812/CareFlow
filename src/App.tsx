@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Home, Calendar, Clock, MapPin, HelpCircle, Stethoscope, Ambulance, ShieldCheck, Search, Building2 } from 'lucide-react';
 import { AppShell } from './components/AppShell.js';
 import { HomeDashboard } from './components/HomeDashboard.js';
 import { SeniorModeHome } from './components/SeniorModeHome.js';
@@ -259,55 +259,29 @@ export default function App() {
     return <AuthScreen onLoginSuccess={(u) => setCurrentUser(u)} />;
   }
 
+  let navItems = undefined;
   if (currentUser.role === 'doctor') {
-    return (
-      <DoctorDashboard
-        currentUser={currentUser}
-        onLogout={() => {
-          authService.clearSession();
-          setCurrentUser(null);
-        }}
-        onSwitchRole={() => {
-          authService.clearSession();
-          setCurrentUser(null);
-        }}
-        showToast={showToast}
-      />
-    );
-  }
-
-  if (currentUser.role === 'staff') {
-    return (
-      <StaffDashboard
-        currentUser={currentUser}
-        onLogout={() => {
-          authService.clearSession();
-          setCurrentUser(null);
-        }}
-        onSwitchRole={() => {
-          authService.clearSession();
-          setCurrentUser(null);
-        }}
-        showToast={showToast}
-      />
-    );
-  }
-
-  if (currentUser.role === 'hospital_admin') {
-    return (
-      <AdminDashboard
-        currentUser={currentUser}
-        onLogout={() => {
-          authService.clearSession();
-          setCurrentUser(null);
-        }}
-        onSwitchRole={() => {
-          authService.clearSession();
-          setCurrentUser(null);
-        }}
-        showToast={showToast}
-      />
-    );
+    navItems = [
+      { id: 'home', label: 'Dashboard', icon: Home },
+      { id: 'doctor_schedule', label: 'Schedule', icon: Calendar },
+      { id: 'doctor_queue', label: 'Live Queue', icon: Clock },
+      { id: 'map', label: 'Navigate', icon: MapPin },
+      { id: 'help', label: 'Help', icon: HelpCircle }
+    ];
+  } else if (currentUser.role === 'staff') {
+    navItems = [
+      { id: 'home', label: 'Operations', icon: Home },
+      { id: 'staff_cases', label: 'Triage Cases', icon: Calendar },
+      { id: 'map', label: 'Navigate', icon: MapPin },
+      { id: 'help', label: 'Help', icon: HelpCircle }
+    ];
+  } else if (currentUser.role === 'hospital_admin') {
+    navItems = [
+      { id: 'home', label: 'Overview', icon: Home },
+      { id: 'admin_analytics', label: 'Analytics', icon: Clock },
+      { id: 'map', label: 'Navigate', icon: MapPin },
+      { id: 'help', label: 'Help', icon: HelpCircle }
+    ];
   }
 
   return (
@@ -331,9 +305,208 @@ export default function App() {
         authService.clearSession();
         setCurrentUser(null);
       }}
+      navItems={navItems}
     >
-      {/* Preparation Card View Override */}
-      {preparationDept ? (
+      {currentUser.role === 'doctor' ? (
+        currentTab === 'doctor_queue' ? (
+          <div className="space-y-4 max-w-4xl mx-auto">
+            <h2 className="text-xl font-extrabold text-slate-900 font-outfit">Live Patient Queue Monitor</h2>
+            <p className="text-xs text-slate-600">Real-time synchronization of consulting tokens.</p>
+            <div className="space-y-3">
+              {appointments.map((appt, idx) => (
+                <div key={appt._id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-teal-50 text-teal-700 font-mono font-bold rounded-xl flex items-center justify-center border border-teal-200">
+                      {idx + 1}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm">{appt.patientName}</div>
+                      <div className="text-xs text-teal-700">Token {appt.tokenNumber} • {appt.appointmentTime}</div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-3 py-1 rounded-lg bg-teal-50 text-teal-700 border border-teal-200">
+                    {appt.status.toUpperCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : currentTab === 'map' ? (
+          <HospitalMap
+            initialDepartmentId={mapTargetDeptId}
+            departments={departments}
+            seniorMode={seniorMode}
+            currentLang={currentLang}
+            onAppointmentUpdate={fetchAllData}
+            onNavigateQueue={() => setCurrentTab('queue')}
+          />
+        ) : currentTab === 'help' ? (
+          <HelpSupport seniorMode={seniorMode} onToggleSeniorMode={handleToggleSeniorMode} />
+        ) : (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-teal-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="space-y-2 text-left z-10">
+                <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold rounded-full uppercase tracking-wider">
+                  Doctor Portal
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-extrabold font-outfit">Welcome back, {currentUser.name}</h1>
+                <p className="text-sm text-slate-300">You have {appointments.length} patient consultations scheduled today.</p>
+              </div>
+              <div className="w-16 h-16 rounded-2xl bg-teal-600/30 border border-teal-500/50 flex items-center justify-center text-teal-300 shrink-0">
+                <Stethoscope className="w-8 h-8" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold font-outfit text-slate-900">Today's Patient Schedule</h2>
+              <div className="grid grid-cols-1 gap-4">
+                {appointments.map((appt) => (
+                  <div key={appt._id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div className="space-y-1.5 text-left">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-bold text-slate-900 text-base">{appt.patientName}</span>
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 font-mono">
+                          Token {appt.tokenNumber}
+                        </span>
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                          {appt.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600 flex items-center gap-4 flex-wrap">
+                        <span>{appt.appointmentDate} • {appt.appointmentTime}</span>
+                        <span>{appt.patientPhone}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={async () => {
+                          await api.updateAppointmentStatus(appt._id, 'arrived');
+                          showToast('Patient marked as arrived');
+                          fetchAllData();
+                        }}
+                        className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-colors cursor-pointer"
+                      >
+                        Mark Arrived
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await api.updateAppointmentStatus(appt._id, 'in_progress');
+                          showToast('Consultation started');
+                          fetchAllData();
+                        }}
+                        className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                      >
+                        Start Consult
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await api.updateAppointmentStatus(appt._id, 'completed');
+                          showToast('Consultation completed');
+                          fetchAllData();
+                        }}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                      >
+                        Complete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      ) : currentUser.role === 'staff' ? (
+        currentTab === 'map' ? (
+          <HospitalMap
+            initialDepartmentId={mapTargetDeptId}
+            departments={departments}
+            seniorMode={seniorMode}
+            currentLang={currentLang}
+            onAppointmentUpdate={fetchAllData}
+            onNavigateQueue={() => setCurrentTab('queue')}
+          />
+        ) : currentTab === 'help' ? (
+          <HelpSupport seniorMode={seniorMode} onToggleSeniorMode={handleToggleSeniorMode} />
+        ) : (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-amber-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl flex items-center justify-between">
+              <div className="space-y-2 text-left">
+                <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-full uppercase tracking-wider">
+                  EMT & Staff Operations
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-extrabold font-outfit">Active Triage & Patient Arrivals</h1>
+                <p className="text-sm text-slate-300">Operator: {currentUser.name}</p>
+              </div>
+              <Ambulance className="w-12 h-12 text-amber-400 shrink-0" />
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold font-outfit text-slate-900">Incoming Patient Queue & Check-In</h2>
+              <div className="grid grid-cols-1 gap-4">
+                {appointments.map((appt) => (
+                  <div key={appt._id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex items-center justify-between">
+                    <div className="space-y-1 text-left">
+                      <div className="font-bold text-slate-900 text-base">{appt.patientName} (Token {appt.tokenNumber})</div>
+                      <div className="text-xs text-slate-600">{appt.departmentName} • {appt.appointmentTime}</div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await api.markPatientArrived(appt._id);
+                        showToast('Patient arrival registered successfully');
+                        fetchAllData();
+                      }}
+                      className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                    >
+                      Check In Patient
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      ) : currentUser.role === 'hospital_admin' ? (
+        currentTab === 'map' ? (
+          <HospitalMap
+            initialDepartmentId={mapTargetDeptId}
+            departments={departments}
+            seniorMode={seniorMode}
+            currentLang={currentLang}
+            onAppointmentUpdate={fetchAllData}
+            onNavigateQueue={() => setCurrentTab('queue')}
+          />
+        ) : currentTab === 'help' ? (
+          <HelpSupport seniorMode={seniorMode} onToggleSeniorMode={handleToggleSeniorMode} />
+        ) : (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <div className="bg-gradient-to-r from-slate-900 to-teal-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl flex items-center justify-between">
+              <div className="space-y-2 text-left">
+                <span className="px-3 py-1 bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold rounded-full uppercase tracking-wider">
+                  Hospital Administration
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-extrabold font-outfit">Director Overview & Analytics</h1>
+                <p className="text-sm text-slate-300">Welcome, {currentUser.name}</p>
+              </div>
+              <ShieldCheck className="w-12 h-12 text-teal-400 shrink-0" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Departments</div>
+                <div className="text-2xl font-extrabold text-slate-900 font-outfit mt-1">{departments.length}</div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Doctors</div>
+                <div className="text-2xl font-extrabold text-slate-900 font-outfit mt-1">{doctors.length}</div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Appointments</div>
+                <div className="text-2xl font-extrabold text-slate-900 font-outfit mt-1">{appointments.length}</div>
+              </div>
+            </div>
+          </div>
+        )
+      ) : preparationDept ? (
         <PreparationCard
           department={preparationDept}
           appointment={activeAppointment}

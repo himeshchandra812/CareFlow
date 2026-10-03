@@ -1,0 +1,6 @@
+{
+  "name": "CareFlow - Smart Patient Appointment & Queue Management",
+  "description": "Patient journey platform for hospital discovery, voice search, appointment booking, real-time queue tracking, and hospital indoor navigation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

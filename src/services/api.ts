@@ -1,0 +1,99 @@
+import {
+  Doctor,
+  Department,
+  Appointment,
+  QueueState,
+  Hospital,
+  HospitalLocation,
+  SarvamIntentResponse,
+  SupportedLanguage
+} from '../types/index.js';
+
+const API_BASE = '/api';
+
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Network error' }));
+    throw new Error(err.error || err.details || `HTTP error ${res.status}`);
+  }
+  return res.json();
+}
+
+export const api = {
+  getDoctors: (params?: { departmentId?: string; search?: string; language?: string }): Promise<Doctor[]> => {
+    const q = new URLSearchParams();
+    if (params?.departmentId) q.append('departmentId', params.departmentId);
+    if (params?.search) q.append('search', params.search);
+    if (params?.language) q.append('language', params.language);
+    return fetchJson(`${API_BASE}/doctors?${q.toString()}`);
+  },
+
+  getDoctorById: (id: string): Promise<Doctor> => fetchJson(`${API_BASE}/doctors/${id}`),
+
+  getDepartments: (): Promise<Department[]> => fetchJson(`${API_BASE}/departments`),
+
+  getDepartmentById: (id: string): Promise<Department> => fetchJson(`${API_BASE}/departments/${id}`),
+
+  getAppointments: (): Promise<Appointment[]> => fetchJson(`${API_BASE}/appointments`),
+
+  getAppointmentById: (id: string): Promise<Appointment> => fetchJson(`${API_BASE}/appointments/${id}`),
+
+  createAppointment: (data: {
+    patientName: string;
+    patientPhone: string;
+    doctorId: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    appointmentType: 'new_visit' | 'follow_up';
+  }): Promise<{ appointment: Appointment; queue: QueueState }> =>
+    fetchJson(`${API_BASE}/appointments`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+
+  markPatientArrived: (id: string): Promise<{ appointment: Appointment; queue: QueueState }> =>
+    fetchJson(`${API_BASE}/appointments/${id}/arrive`, {
+      method: 'POST'
+    }),
+
+  updateAppointmentStatus: (
+    id: string,
+    status: Appointment['status'],
+    cancelReason?: string
+  ): Promise<Appointment> =>
+    fetchJson(`${API_BASE}/appointments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, cancelReason })
+    }),
+
+  rescheduleAppointment: (id: string, newDate: string, newTime: string): Promise<Appointment> =>
+    fetchJson(`${API_BASE}/appointments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'reschedule', newDate, newTime })
+    }),
+
+  getQueueByAppointmentId: (appointmentId: string): Promise<QueueState> =>
+    fetchJson(`${API_BASE}/queue/${appointmentId}`),
+
+  advanceQueue: (appointmentId: string): Promise<QueueState> =>
+    fetchJson(`${API_BASE}/queue/${appointmentId}`, { method: 'PATCH' }),
+
+  getHospitalInfo: (): Promise<Hospital> => fetchJson(`${API_BASE}/hospitals/hosp_careflow_01`),
+
+  getHospitalNavigation: (departmentId?: string): Promise<HospitalLocation[]> =>
+    fetchJson(`${API_BASE}/hospitals/hosp_careflow_01/navigation?${departmentId ? `departmentId=${departmentId}` : ''}`),
+
+  sendSarvamIntent: (
+    text: string,
+    language: SupportedLanguage = 'en',
+    context?: Record<string, any>
+  ): Promise<SarvamIntentResponse> =>
+    fetchJson(`${API_BASE}/ai/intent`, {
+      method: 'POST',
+      body: JSON.stringify({ text, message: text, language, context })
+    })
+};

@@ -110,6 +110,14 @@ async function initializeCollections(db: Db) {
       await db.collection<any>('queues').insertMany(SEED_QUEUES);
       await db.collection<any>('hospital_locations').insertMany(SEED_HOSPITAL_LOCATIONS);
       console.log('[CareFlow DB] MongoDB Atlas collections initialized successfully.');
+    } else {
+      // Ensure unique profile images are synchronized
+      for (const doc of SEED_DOCTORS) {
+        await doctorsCol.updateOne(
+          { _id: doc._id as any },
+          { $set: { profileImage: doc.profileImage } }
+        );
+      }
     }
   } catch (e: any) {
     console.error('[CareFlow DB] Non-fatal error checking collection counts:', e.message);

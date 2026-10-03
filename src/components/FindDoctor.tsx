@@ -19,6 +19,8 @@ import {
 import { Doctor, Department, SupportedLanguage } from '../types/index.js';
 import { ResponsiveGrid } from './layout/ResponsiveGrid.js';
 import { t } from '../services/i18n.js';
+import { DoctorAvatar } from './DoctorAvatar.js';
+import { validateDoctorImageUniqueness } from '../utils/doctorImages.js';
 
 interface FindDoctorProps {
   doctors: Doctor[];
@@ -84,6 +86,13 @@ export const FindDoctor: React.FC<FindDoctorProps> = ({
     selectedHospital !== 'all' ||
     availabilityFilter !== 'all' ||
     feeFilter !== 'all';
+
+  // Validation of doctor image uniqueness
+  React.useEffect(() => {
+    if (doctors && doctors.length > 0) {
+      validateDoctorImageUniqueness(doctors);
+    }
+  }, [doctors]);
 
   // Smart Search & Multi-criteria Filtering
   const filteredDoctors = useMemo(() => {
@@ -412,11 +421,9 @@ export const FindDoctor: React.FC<FindDoctorProps> = ({
                 
                 {/* Doctor Avatar & Titles */}
                 <div className="flex items-start gap-4">
-                  <img
-                    src={doc.profileImage}
-                    alt={doc.name}
-                    className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl object-cover bg-slate-100 border-2 border-slate-200 shrink-0"
-                    referrerPolicy="no-referrer"
+                  <DoctorAvatar
+                    doctor={doc}
+                    size="md"
                   />
                   <div className="space-y-1 min-w-0 flex-1">
                     <h3

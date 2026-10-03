@@ -13,6 +13,7 @@ import {
   Stethoscope
 } from 'lucide-react';
 import { Doctor, SupportedLanguage } from '../types/index.js';
+import { DoctorAvatar } from './DoctorAvatar.js';
 import { t } from '../services/i18n.js';
 
 interface DoctorProfileModalProps {
@@ -95,11 +96,9 @@ export const DoctorProfileModal: React.FC<DoctorProfileModalProps> = ({
           
           {/* Main Info Header */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5 text-center sm:text-left">
-            <img
-              src={doctor.profileImage}
-              alt={doctor.name}
-              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover bg-slate-100 border-2 border-slate-200 shadow-md shrink-0"
-              referrerPolicy="no-referrer"
+            <DoctorAvatar
+              doctor={doctor}
+              size="lg"
             />
             <div className="space-y-1.5 min-w-0 flex-1">
               <h2

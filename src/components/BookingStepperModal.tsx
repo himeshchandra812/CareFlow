@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Doctor, SupportedLanguage, Appointment, QueueState } from '../types/index.js';
 import { api } from '../services/api.js';
+import { DoctorAvatar } from './DoctorAvatar.js';
 
 interface BookingStepperModalProps {
   doctor: Doctor | null;
@@ -268,11 +269,9 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
                 <div className="p-4 sm:p-5 bg-teal-50/70 rounded-2xl border-2 border-teal-600 shadow-xs space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <img
-                        src={selectedDoctor.profileImage}
-                        alt={selectedDoctor.name}
-                        className="w-16 h-16 rounded-2xl object-cover bg-slate-200 border border-slate-300 shrink-0"
-                        referrerPolicy="no-referrer"
+                      <DoctorAvatar
+                        doctor={selectedDoctor}
+                        size="md"
                       />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -354,11 +353,9 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
               {/* Doctor Quick Badge */}
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={selectedDoctor.profileImage}
-                    alt={selectedDoctor.name}
-                    className="w-10 h-10 rounded-xl object-cover bg-slate-200"
-                    referrerPolicy="no-referrer"
+                  <DoctorAvatar
+                    doctor={selectedDoctor}
+                    size="sm"
                   />
                   <div>
                     <h4 className="font-bold text-slate-900 text-sm">{selectedDoctor.name}</h4>

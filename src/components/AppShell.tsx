@@ -96,8 +96,8 @@ export const AppShell: React.FC<AppShellProps> = ({
             })}
           </nav>
 
-          {/* Zone 3: Actions (Senior Mode, Language, Voice, Patient Badge) */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Zone 3: Actions (Senior Mode, Language, Voice, Patient Badge / Auth) */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Language Selector */}
             <div className="relative flex items-center">
               <Globe className="w-3.5 h-3.5 text-slate-500 absolute left-2 pointer-events-none" />

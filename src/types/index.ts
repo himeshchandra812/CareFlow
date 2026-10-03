@@ -8,6 +8,7 @@ export interface Patient {
   email: string;
   preferredLanguage: SupportedLanguage;
   accessibilityMode: boolean;
+  authProviderId?: string;
   createdAt: string;
   updatedAt: string;
 }

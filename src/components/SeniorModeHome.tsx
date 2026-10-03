@@ -41,6 +41,7 @@ export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
       setMarkingArrival(false);
     }
   };
+
   return (
     <div className="max-w-3xl mx-auto space-y-8 py-4">
       {/* Friendly Large Header */}

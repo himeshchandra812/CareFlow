@@ -215,20 +215,103 @@ export async function getDepartmentById(id: string): Promise<Department | null> 
 }
 
 // ----------------------------------------------------
-// PATIENTS COLLECTION
+// PATIENTS COLLECTION & PHONE NORMALIZATION
 // ----------------------------------------------------
+
+export function normalizePhoneNumber(phone: string): string {
+  if (!phone) return '';
+  let cleaned = phone.trim().replace(/[\s\-\(\)]/g, '');
+  if (!cleaned.startsWith('+')) {
+    if (cleaned.length === 10) {
+      cleaned = `+91${cleaned}`;
+    } else if (cleaned.length === 12 && cleaned.startsWith('91')) {
+      cleaned = `+${cleaned}`;
+    } else if (cleaned.length === 11 && cleaned.startsWith('0')) {
+      cleaned = `+91${cleaned.slice(1)}`;
+    } else {
+      cleaned = `+91${cleaned}`;
+    }
+  }
+  return cleaned;
+}
+
+export async function getPatientByPhone(phone: string): Promise<Patient | null> {
+  const normalized = normalizePhoneNumber(phone);
+  const rawDigits = normalized.replace(/[^0-9]/g, ''); // e.g. 919876543210
+  const national10 = rawDigits.slice(-10); // e.g. 9876543210
+
+  const db = await connectToDatabase();
+  if (db) {
+    // Search by normalized, raw, or national 10 digits
+    const existing = await db.collection<Patient>('patients').findOne({
+      $or: [
+        { phone: normalized },
+        { phone: rawDigits },
+        { phone: { $regex: national10 } }
+      ]
+    });
+    if (existing) return existing;
+  }
+
+  // Fallback to in-memory store
+  const found = inMemoryStore.patients.find((p) => {
+    const pNorm = normalizePhoneNumber(p.phone);
+    return pNorm === normalized || p.phone.replace(/[^0-9]/g, '').slice(-10) === national10;
+  });
+  return found || null;
+}
 
 export async function getPatientById(id: string): Promise<Patient | null> {
   const db = await connectToDatabase();
   if (db) {
-    return await db.collection<Patient>('patients').findOne({ _id: id });
+    const existing = await db.collection<Patient>('patients').findOne({ _id: id as any });
+    if (existing) return existing;
   }
   return inMemoryStore.patients.find((p) => p._id === id) || null;
 }
 
-// ----------------------------------------------------
-// APPOINTMENTS & QUEUES COLLECTIONS
-// ----------------------------------------------------
+export async function createPatient(data: Partial<Patient>): Promise<Patient> {
+  const db = await connectToDatabase();
+  const normalizedPhone = normalizePhoneNumber(data.phone || '');
+  
+  const newPatient: Patient = {
+    _id: `pat_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    name: data.name?.trim() || 'Patient',
+    age: data.age || 35,
+    phone: normalizedPhone,
+    email: data.email || `${normalizedPhone.replace(/[^0-9]/g, '')}@careflow.org`,
+    preferredLanguage: data.preferredLanguage || 'en',
+    accessibilityMode: !!data.accessibilityMode,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (db) {
+    await db.collection<Patient>('patients').insertOne(newPatient);
+  } else {
+    inMemoryStore.patients.unshift(newPatient);
+  }
+
+  return newPatient;
+}
+
+export async function updatePatient(id: string, updates: Partial<Patient>): Promise<Patient | null> {
+  const db = await connectToDatabase();
+  const updateDoc = {
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (db) {
+    await db.collection<any>('patients').updateOne({ _id: id as any }, { $set: updateDoc });
+  } else {
+    const p = inMemoryStore.patients.find((pt) => pt._id === id);
+    if (p) {
+      Object.assign(p, updateDoc);
+    }
+  }
+  return getPatientById(id);
+}
 
 export async function getAppointments(patientId?: string): Promise<Appointment[]> {
   const db = await connectToDatabase();
@@ -387,8 +470,9 @@ export async function getAppointmentPreparation(
 }
 
 export async function createAppointment(bookingData: {
-  patientName: string;
-  patientPhone: string;
+  patientId?: string;
+  patientName?: string;
+  patientPhone?: string;
   doctorId: string;
   appointmentDate: string;
   appointmentTime: string;
@@ -412,9 +496,12 @@ export async function createAppointment(bookingData: {
 
   const dept = await getDepartmentById(doctor.departmentId);
 
+  const effectivePatientId = bookingData.patientId || 'pat_rajesh_kumar';
+  const effectivePatient = await getPatientById(effectivePatientId);
+
   // 3. Perform Server-side Visit Type Detection
   const detection = await detectVisitType({
-    patientId: 'pat_rajesh_kumar',
+    patientId: effectivePatientId,
     doctorId: doctor._id,
     departmentId: doctor.departmentId
   });
@@ -445,9 +532,9 @@ export async function createAppointment(bookingData: {
   // 5. Create appointment document
   const newApp: Appointment = {
     _id: `app_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    patientId: 'pat_rajesh_kumar',
-    patientName: bookingData.patientName || 'Rajesh Kumar',
-    patientPhone: bookingData.patientPhone || '+91 98765 43210',
+    patientId: effectivePatientId,
+    patientName: bookingData.patientName || effectivePatient?.name || 'Rajesh Kumar',
+    patientPhone: bookingData.patientPhone || effectivePatient?.phone || '+91 98765 43210',
     doctorId: doctor._id,
     doctorName: doctor.name,
     doctorSpecialization: doctor.specialization,

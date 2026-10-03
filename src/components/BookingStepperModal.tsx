@@ -62,6 +62,7 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
   const [patientName, setPatientName] = useState('Rajesh Kumar');
   const [patientPhone, setPatientPhone] = useState('+91 98765 43210');
   const [patientEmail, setPatientEmail] = useState('rajesh.kumar@careflow.org');
+
   const [visitType, setVisitType] = useState<'new_visit' | 'follow_up'>('new_visit');
   const [visitTypeSource, setVisitTypeSource] = useState<'detected' | 'patient_confirmed'>('detected');
   const [previousAppointmentId, setPreviousAppointmentId] = useState<string | null>(null);
@@ -73,7 +74,11 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
     let isMounted = true;
     if (selectedDoctor?._id) {
       setIsDetectingVisit(true);
-      api.detectVisitType({ doctorId: selectedDoctor._id, departmentId: selectedDoctor.departmentId })
+      api.detectVisitType({
+        doctorId: selectedDoctor._id,
+        departmentId: selectedDoctor.departmentId,
+        patientId: 'pat_rajesh_kumar'
+      })
         .then((res) => {
           if (isMounted) {
             setVisitType(res.visitType);
@@ -83,9 +88,9 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
             setIsDetectingVisit(false);
           }
         })
-        .catch(() => {
-          if (isMounted) setIsDetectingVisit(false);
-        });
+          .catch(() => {
+            if (isMounted) setIsDetectingVisit(false);
+          });
     }
     return () => {
       isMounted = false;

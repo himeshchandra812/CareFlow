@@ -20,7 +20,12 @@ import {
   advanceQueue,
   markPatientArrived,
   getHospitalInfo,
-  getHospitalNavigation
+  getHospitalNavigation,
+  normalizePhoneNumber,
+  getPatientByPhone,
+  getPatientById,
+  createPatient,
+  updatePatient
 } from './src/db/mongo.js';
 import { processSarvamNLU } from './src/services/sarvam/intentEngine.js';
 import { processSarvamSTT } from './src/services/sarvam/voiceEngine.js';
@@ -120,7 +125,8 @@ app.get('/api/appointments/detect-visit-type', async (req, res) => {
 
 app.get('/api/appointments', async (req, res) => {
   try {
-    const apps = await getAppointments();
+    const patientId = req.query.patientId as string || 'pat_rajesh_kumar';
+    const apps = await getAppointments(patientId);
     res.json(apps);
   } catch (e: any) {
     res.status(500).json({ error: "We couldn't load your appointments right now. Please try again." });
@@ -149,9 +155,11 @@ app.get('/api/appointments/:id', async (req, res) => {
 
 app.post('/api/appointments', async (req, res) => {
   try {
+    const patientId = 'pat_rajesh_kumar';
+    const patientName = req.body.patientName || 'Rajesh Kumar';
+    const patientPhone = req.body.patientPhone || '+91 98765 43210';
+
     const {
-      patientName,
-      patientPhone,
       doctorId,
       appointmentDate,
       appointmentTime,
@@ -166,6 +174,7 @@ app.post('/api/appointments', async (req, res) => {
     }
 
     const result = await createAppointment({
+      patientId,
       patientName,
       patientPhone,
       doctorId,

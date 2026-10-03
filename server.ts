@@ -196,7 +196,12 @@ app.post('/api/appointments/:id/arrive', async (req, res) => {
 app.patch('/api/appointments/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, status, cancelReason, newDate, newTime } = req.body;
+    const { action, status, arrivalStatus, cancelReason, newDate, newTime } = req.body;
+
+    if (action === 'arrive' || arrivalStatus === 'arrived' || status === 'arrived') {
+      const result = await markPatientArrived(id);
+      return res.json(result);
+    }
 
     if (action === 'reschedule' || (newDate && newTime)) {
       const updated = await rescheduleAppointment(id, newDate, newTime);
@@ -212,7 +217,7 @@ app.patch('/api/appointments/:id', async (req, res) => {
 
     res.status(400).json({ error: 'Invalid update payload' });
   } catch (e: any) {
-    res.status(500).json({ error: "We couldn't update the appointment right now. Please try again." });
+    res.status(500).json({ error: e.message || "We couldn't update the appointment right now. Please try again." });
   }
 });
 

@@ -104,6 +104,7 @@ export interface Appointment {
   previousAppointmentReason?: string;
   tokenNumber: string;
   status: AppointmentStatus;
+  arrivalStatus?: 'not_arrived' | 'arrived';
   arrivedAt?: string;
   cancelReason?: string;
   estimatedWaitTime: number;

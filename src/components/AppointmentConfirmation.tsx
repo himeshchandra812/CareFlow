@@ -54,6 +54,23 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
   );
   const [markingArrival, setMarkingArrival] = useState(false);
   const [arrivalError, setArrivalError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(3);
+
+  // Automatic 3-second redirect timer to Dashboard
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown((prev) => (prev > 1 ? prev - 1 : 1));
+    }, 1000);
+
+    const timer = setTimeout(() => {
+      onDone();
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timer);
+    };
+  }, [onDone]);
 
   useEffect(() => {
     if (!department && currentAppt.departmentId) {
@@ -65,8 +82,10 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
   }, [currentAppt.departmentId, department]);
 
   const isArrived =
+    currentAppt.arrivalStatus === 'arrived' ||
     currentAppt.status === 'arrived' ||
     currentAppt.status === 'waiting' ||
+    currentAppt.status === 'in_progress' ||
     currentQueue?.isPatientArrived;
 
   const handleArrival = async () => {
@@ -110,6 +129,21 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
           <p className="text-xs text-slate-500 font-mono">
             Booking ID: #{appointment._id.slice(-8)}
           </p>
+        </div>
+
+        {/* Automatic Redirect Banner */}
+        <div className="p-3 bg-teal-50/90 rounded-2xl border border-teal-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-teal-900 font-medium max-w-lg mx-auto">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-ping shrink-0" />
+            <span>Taking you to your Dashboard in <strong>{countdown}s</strong>...</span>
+          </div>
+          <button
+            type="button"
+            onClick={onDone}
+            className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer shrink-0"
+          >
+            Go to Dashboard Now
+          </button>
         </div>
 
         {/* Doctor & Dept Card Block */}

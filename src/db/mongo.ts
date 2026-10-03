@@ -232,29 +232,40 @@ export async function getPatientById(id: string): Promise<Patient | null> {
 
 export async function getAppointments(patientId?: string): Promise<Appointment[]> {
   const db = await connectToDatabase();
+  let apps: Appointment[] = [];
   if (db) {
     const query = patientId ? { patientId } : {};
-    return await db
+    apps = await db
       .collection<Appointment>('appointments')
       .find(query)
       .sort({ createdAt: -1 })
       .toArray();
+  } else {
+    apps = [...inMemoryStore.appointments];
+    if (patientId) {
+      apps = apps.filter((a) => a.patientId === patientId);
+    }
   }
-  let apps = [...inMemoryStore.appointments];
-  if (patientId) {
-    apps = apps.filter((a) => a.patientId === patientId);
-  }
-  return apps.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+
+  return apps.map((a) => ({
+    ...a,
+    arrivalStatus: a.arrivalStatus || (a.status === 'arrived' || a.status === 'waiting' || a.status === 'in_progress' ? 'arrived' : 'not_arrived')
+  })).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function getAppointmentById(id: string): Promise<Appointment | null> {
   const db = await connectToDatabase();
+  let app: Appointment | null = null;
   if (db) {
-    return await db.collection<Appointment>('appointments').findOne({ _id: id });
+    app = await db.collection<Appointment>('appointments').findOne({ _id: id as any });
+  } else {
+    app = inMemoryStore.appointments.find((a) => a._id === id) || null;
   }
-  return inMemoryStore.appointments.find((a) => a._id === id) || null;
+  if (!app) return null;
+  return {
+    ...app,
+    arrivalStatus: app.arrivalStatus || (app.status === 'arrived' || app.status === 'waiting' || app.status === 'in_progress' ? 'arrived' : 'not_arrived')
+  };
 }
 
 export async function detectVisitType(params: {
@@ -504,9 +515,17 @@ export async function markPatientArrived(
   const arrivalTime = new Date().toISOString();
 
   if (db) {
+    const existing = await db.collection<Appointment>('appointments').findOne({ _id: appointmentId as any });
+    if (!existing) {
+      throw new Error('Appointment not found');
+    }
+    if (existing.status === 'cancelled') {
+      throw new Error('Cannot check in for a cancelled appointment');
+    }
+
     await db.collection<any>('appointments').updateOne(
       { _id: appointmentId as any },
-      { $set: { status: 'arrived', arrivedAt: arrivalTime, updatedAt: arrivalTime } }
+      { $set: { status: 'arrived', arrivalStatus: 'arrived', arrivedAt: arrivalTime, updatedAt: arrivalTime } }
     );
     await db.collection<any>('queues').updateOne(
       { appointmentId },
@@ -514,11 +533,14 @@ export async function markPatientArrived(
     );
   } else {
     const app = inMemoryStore.appointments.find((a) => a._id === appointmentId);
-    if (app) {
-      app.status = 'arrived';
-      app.arrivedAt = arrivalTime;
-      app.updatedAt = arrivalTime;
-    }
+    if (!app) throw new Error('Appointment not found');
+    if (app.status === 'cancelled') throw new Error('Cannot check in for a cancelled appointment');
+
+    app.status = 'arrived';
+    app.arrivalStatus = 'arrived';
+    app.arrivedAt = arrivalTime;
+    app.updatedAt = arrivalTime;
+
     const q = inMemoryStore.queues.find((q) => q.appointmentId === appointmentId);
     if (q) {
       q.isPatientArrived = true;
@@ -529,7 +551,7 @@ export async function markPatientArrived(
   const updatedApp = await getAppointmentById(appointmentId);
   const updatedQueue = await getQueueByAppointmentId(appointmentId);
 
-  if (!updatedApp || !updatedQueue) throw new Error('Appointment not found');
+  if (!updatedApp || !updatedQueue) throw new Error('Appointment verification failed after update');
   return { appointment: updatedApp, queue: updatedQueue };
 }
 

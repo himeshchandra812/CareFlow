@@ -268,7 +268,11 @@ export default function App() {
           onCancel={() => {
             setCancelTarget(lastBookedResult.appointment);
           }}
-          onDone={() => setLastBookedResult(null)}
+          onDone={() => {
+            setLastBookedResult(null);
+            fetchAllData();
+            setCurrentTab('home');
+          }}
           onAppointmentUpdate={(res) => {
             if (res) {
               setLastBookedResult(res);

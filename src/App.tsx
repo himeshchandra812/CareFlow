@@ -16,6 +16,7 @@ import { RescheduleModal } from './components/RescheduleModal.js';
 import { CancelModal } from './components/CancelModal.js';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal.js';
 import { HelpSupport } from './components/HelpSupport.js';
+import { PrescriptionsView } from './components/PrescriptionsView.js';
 
 import {
   Doctor,
@@ -32,7 +33,6 @@ import { AuthScreen } from './components/AuthScreen.js';
 import { DoctorDashboard } from './components/DoctorDashboard.js';
 import { StaffDashboard } from './components/StaffDashboard.js';
 import { AdminDashboard } from './components/AdminDashboard.js';
-import { PrescriptionsView } from './components/PrescriptionsView.js';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
@@ -112,7 +112,30 @@ export default function App() {
 
   useEffect(() => {
     fetchAllData();
+    checkPaymentParams();
   }, []);
+
+  const checkPaymentParams = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    const sessionId = params.get('session_id');
+    const appointmentId = params.get('appointment_id');
+
+    if (paymentStatus === 'success' && sessionId && appointmentId) {
+      try {
+        await api.verifyPaymentSession(sessionId, appointmentId);
+        showToast('Payment successful! Your appointment is confirmed.');
+        fetchAllData();
+        // Clear query params
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } catch (err) {
+        showToast('There was an issue verifying your payment.', 'error');
+      }
+    } else if (paymentStatus === 'cancelled') {
+      showToast('Payment was cancelled.', 'error');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  };
 
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -261,17 +284,9 @@ export default function App() {
   }
 
   let navItems = undefined;
-  if (currentUser.role !== 'patient') {
-    navItems = [{ id: 'home', label: 'Dashboard', icon: Home }];
-  } else {
+  if (currentUser.role === 'doctor' || currentUser.role === 'staff' || currentUser.role === 'hospital_admin') {
     navItems = [
-      { id: 'home', label: 'Dashboard', icon: Home },
-      { id: 'doctors', label: 'Find Doctors / Hospitals', icon: Search },
-      { id: 'appointments', label: 'Appointments', icon: Calendar },
-      { id: 'prescriptions', label: 'Prescriptions', icon: Building2 },
-      { id: 'queue', label: 'Queue / Wait Time', icon: Clock },
-      { id: 'map', label: 'Hospital Map', icon: MapPin },
-      { id: 'help', label: 'Help', icon: HelpCircle }
+      { id: 'home', label: 'Dashboard', icon: Home }
     ];
   }
 
@@ -299,7 +314,7 @@ export default function App() {
       navItems={navItems}
     >
       {/* Role-Based View Logic */}
-      {currentUser.role === 'doctor' && (currentTab === 'home' || currentTab === 'doctor_schedule' || currentTab === 'doctor_queue') ? (
+      {currentUser.role === 'doctor' && currentTab === 'home' ? (
         <DoctorDashboard 
           currentUser={currentUser}
           appointments={appointments}
@@ -307,10 +322,8 @@ export default function App() {
           loading={loading}
           onRefresh={fetchAllData}
           showToast={showToast}
-          activeTab={currentTab === 'doctor_queue' ? 'queue' : 'appointments'}
-          onTabChange={(tab) => setCurrentTab(tab === 'queue' ? 'doctor_queue' : 'doctor_schedule')}
         />
-      ) : currentUser.role === 'staff' && (currentTab === 'home' || currentTab === 'staff_cases') ? (
+      ) : currentUser.role === 'staff' && currentTab === 'home' ? (
         <StaffDashboard 
           currentUser={currentUser}
           appointments={appointments}
@@ -318,7 +331,7 @@ export default function App() {
           onRefresh={fetchAllData}
           showToast={showToast}
         />
-      ) : currentUser.role === 'hospital_admin' && (currentTab === 'home' || currentTab === 'admin_analytics') ? (
+      ) : currentUser.role === 'hospital_admin' && currentTab === 'home' ? (
         <AdminDashboard 
           currentUser={currentUser}
           doctors={doctors}
@@ -393,6 +406,7 @@ export default function App() {
             {currentTab === 'home' && (
               seniorMode ? (
                 <SeniorModeHome
+                  currentUser={currentUser}
                   currentLang={currentLang}
                   activeAppointment={activeAppointment}
                   appointments={appointments}
@@ -403,6 +417,7 @@ export default function App() {
                 />
               ) : (
                 <HomeDashboard
+                  currentUser={currentUser}
                   currentLang={currentLang}
                   activeAppointment={activeAppointment}
                   appointments={appointments}
@@ -464,10 +479,6 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'prescriptions' && currentUser.role === 'patient' && (
-              <PrescriptionsView onToast={showToast} />
-            )}
-
             {currentTab === 'appointments' && (
               <AppointmentsList
                 appointments={appointments}
@@ -504,6 +515,20 @@ export default function App() {
                 }}
                 onAppointmentUpdate={fetchAllData}
               />
+            )}
+
+            {currentTab === 'prescriptions' && currentUser.role === 'patient' && (
+              <PrescriptionsView currentUser={currentUser} currentLang={currentLang} seniorMode={seniorMode} />
+            )}
+
+            {currentTab === 'prescriptions' && currentUser.role !== 'patient' && (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                <AlertCircle className="w-12 h-12 mb-4 opacity-20 text-rose-500" />
+                <p className="font-bold text-rose-800">Access Denied: Patients Only</p>
+                <button onClick={() => setCurrentTab('home')} className="mt-4 text-teal-600 font-bold hover:underline">
+                  Back to Dashboard
+                </button>
+              </div>
             )}
           </>
         )

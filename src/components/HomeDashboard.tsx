@@ -16,12 +16,13 @@ import {
   FileCheck,
   CheckCircle2
 } from 'lucide-react';
-import { SupportedLanguage, Appointment, Department, QueueState } from '../types/index.js';
+import { SupportedLanguage, Appointment, Department, QueueState, User as UserType } from '../types/index.js';
 import { QueueCard } from './QueueCard.js';
 import { t } from '../services/i18n.js';
 import { useViewport } from '../hooks/useViewport.js';
 
 interface HomeDashboardProps {
+  currentUser: UserType | null;
   currentLang: SupportedLanguage;
   activeAppointment: Appointment | null;
   appointments: Appointment[];
@@ -35,6 +36,7 @@ interface HomeDashboardProps {
 }
 
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({
+  currentUser,
   currentLang,
   activeAppointment,
   appointments,
@@ -82,7 +84,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
 
           <div className="space-y-1.5">
             <h1 className="text-fluid-h1 font-extrabold tracking-tight font-outfit">
-              {t('greeting', currentLang)}, Rajesh 👋
+              {t('greeting', currentLang)}, {currentUser?.name?.split(' ')[0] || 'Patient'} 👋
             </h1>
             <p className="text-slate-300 text-fluid-body-lg font-normal">
               {t('howCanWeHelp', currentLang)}
@@ -353,6 +355,19 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({
                 <div>
                   <div className="font-bold text-slate-900 text-sm">My Appointment</div>
                   <div className="text-[11px] text-slate-500">Manage bookings</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigate('prescriptions')}
+                className="uiverse-card p-4 rounded-2xl text-left space-y-2 group cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-900 text-sm">Medical Records</div>
+                  <div className="text-[11px] text-slate-500">View prescriptions</div>
                 </div>
               </button>
 

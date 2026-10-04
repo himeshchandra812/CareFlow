@@ -13,7 +13,8 @@ import {
   Building2,
   UserCheck,
   LogOut,
-  Sparkles
+  Sparkles,
+  FileCheck
 } from 'lucide-react';
 import { SupportedLanguage, User } from '../types/index.js';
 import { LANGUAGES, t } from '../services/i18n.js';
@@ -51,22 +52,33 @@ export const AppShell: React.FC<AppShellProps> = ({
   currentUser,
   onLogout,
   onSwitchRole,
-  navItems,
+  navItems: propNavItems,
   children
 }) => {
   const { width, isMobile, isTablet, isDesktop, isUltrawide, isShortViewport } = useViewport();
 
-  const defaultNavItems = [
-    { id: 'home', label: t('home', currentLang), icon: Home },
-    { id: 'doctors', label: t('doctors', currentLang), icon: Search },
-    { id: 'departments', label: 'Departments', icon: Building2 },
-    { id: 'appointments', label: t('appointments', currentLang), icon: Calendar },
-    { id: 'queue', label: t('queue', currentLang), icon: Clock },
-    { id: 'map', label: t('map', currentLang), icon: MapPin },
-    { id: 'help', label: t('help', currentLang), icon: HelpCircle }
-  ];
+  const getRoleNavItems = (): NavItem[] => {
+    if (!currentUser) return [];
 
-  const activeNavItems = navItems || defaultNavItems;
+    if (currentUser.role === 'patient') {
+      return [
+        { id: 'home', label: t('home', currentLang), icon: Home },
+        { id: 'appointments', label: t('appointments', currentLang), icon: Calendar },
+        { id: 'prescriptions', label: 'Prescriptions', icon: FileCheck },
+        { id: 'queue', label: t('queue', currentLang), icon: Clock },
+        { id: 'doctors', label: t('doctors', currentLang), icon: Search },
+        { id: 'map', label: t('map', currentLang), icon: MapPin },
+        { id: 'help', label: t('help', currentLang), icon: HelpCircle }
+      ];
+    }
+
+    // For all other roles (Doctor, Staff, Admin) as per Feature 3
+    return [
+      { id: 'home', label: 'Dashboard', icon: Home }
+    ];
+  };
+
+  const activeNavItems = propNavItems || getRoleNavItems();
 
   const initials = currentUser?.name
     ? currentUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()

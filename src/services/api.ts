@@ -10,7 +10,8 @@ import {
   VisitTypeDetectionResult,
   AppointmentPreparationInfo,
   VisitType,
-  VisitTypeSource
+  VisitTypeSource,
+  Prescription
 } from '../types/index.js';
 import { authService } from './auth.js';
 
@@ -144,5 +145,40 @@ export const api = {
     fetchJson(`${API_BASE}/ai/voice`, {
       method: 'POST',
       body: JSON.stringify({ audioBase64, language, context })
+    }),
+
+  // Prescriptions
+  getPrescriptions: (): Promise<Prescription[]> => fetchJson(`${API_BASE}/prescriptions`),
+  createPrescription: (data: {
+    patientId: string;
+    title: string;
+    prescriptionDate: string;
+    notes: string;
+    appointmentId?: string;
+  }): Promise<Prescription> =>
+    fetchJson(`${API_BASE}/prescriptions`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  updatePrescription: (id: string, data: Partial<Prescription>): Promise<Prescription> =>
+    fetchJson(`${API_BASE}/prescriptions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+  deletePrescription: (id: string): Promise<{ message: string }> =>
+    fetchJson(`${API_BASE}/prescriptions/${id}`, {
+      method: 'DELETE'
+    }),
+
+  // Payments
+  createCheckoutSession: (appointmentId: string, amount: number): Promise<{ sessionId: string; url: string }> =>
+    fetchJson(`${API_BASE}/payments/create-checkout-session`, {
+      method: 'POST',
+      body: JSON.stringify({ appointmentId, amount })
+    }),
+  verifyPaymentSession: (sessionId: string, appointmentId: string): Promise<{ status: string; verified: boolean }> =>
+    fetchJson(`${API_BASE}/payments/verify-session`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, appointmentId })
     })
 };

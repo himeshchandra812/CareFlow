@@ -13,7 +13,8 @@ import {
   Loader2,
   FileCheck,
   AlertCircle,
-  ClipboardList
+  ClipboardList,
+  CreditCard
 } from 'lucide-react';
 import { Appointment, QueueState, SupportedLanguage, Department } from '../types/index.js';
 import { StatusBadge } from './StatusBadge.js';
@@ -55,9 +56,12 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
   const [markingArrival, setMarkingArrival] = useState(false);
   const [arrivalError, setArrivalError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
+  const [isPaying, setIsPaying] = useState(false);
 
-  // Automatic 3-second redirect timer to Dashboard
+  // Automatic 3-second redirect timer to Dashboard (only if not paying)
   useEffect(() => {
+    if (isPaying) return;
+
     const interval = setInterval(() => {
       setCountdown((prev) => (prev > 1 ? prev - 1 : 1));
     }, 1000);
@@ -70,7 +74,20 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
       clearInterval(interval);
       clearTimeout(timer);
     };
-  }, [onDone]);
+  }, [onDone, isPaying]);
+
+  const handlePayNow = async () => {
+    try {
+      setIsPaying(true);
+      const { url } = await api.createCheckoutSession(appointment._id, 750); 
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (err) {
+      console.error('Payment error:', err);
+      setIsPaying(false);
+    }
+  };
 
   useEffect(() => {
     if (!department && currentAppt.departmentId) {
@@ -132,18 +149,45 @@ export const AppointmentConfirmation: React.FC<AppointmentConfirmationProps> = (
         </div>
 
         {/* Automatic Redirect Banner */}
-        <div className="p-3 bg-teal-50/90 rounded-2xl border border-teal-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-teal-900 font-medium max-w-lg mx-auto">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-ping shrink-0" />
-            <span>Taking you to your Dashboard in <strong>{countdown}s</strong>...</span>
+        {!isPaying && (
+          <div className="p-3 bg-teal-50/90 rounded-2xl border border-teal-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-teal-900 font-medium max-w-lg mx-auto">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-600 animate-ping shrink-0" />
+              <span>Taking you to your Dashboard in <strong>{countdown}s</strong>...</span>
+            </div>
+            <button
+              type="button"
+              onClick={onDone}
+              className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer shrink-0"
+            >
+              Go to Dashboard Now
+            </button>
           </div>
+        )}
+
+        {/* Stripe Payment CTA */}
+        <div className="p-5 bg-indigo-50 rounded-2xl border-2 border-indigo-100 space-y-4 text-center">
+          <div className="space-y-1">
+            <h4 className="text-base font-bold text-indigo-900 font-outfit flex items-center justify-center gap-2">
+              <CreditCard className="w-5 h-5" /> Secure Consultation Payment
+            </h4>
+            <p className="text-xs text-indigo-700 font-medium">
+              Complete your payment of <strong>₹750</strong> securely via Stripe to confirm your priority slot.
+            </p>
+          </div>
+          
           <button
-            type="button"
-            onClick={onDone}
-            className="px-3.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl text-xs transition-all shadow-xs cursor-pointer shrink-0"
+            onClick={handlePayNow}
+            disabled={isPaying}
+            className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-200 flex items-center justify-center gap-3 transition-all cursor-pointer disabled:opacity-50"
           >
-            Go to Dashboard Now
+            {isPaying ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5 text-indigo-200" />}
+            <span>{isPaying ? 'Preparing Checkout...' : 'Pay with Stripe Checkout'}</span>
           </button>
+          
+          <div className="flex items-center justify-center gap-4 grayscale opacity-60">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" alt="Stripe" className="h-5" />
+          </div>
         </div>
 
         {/* Doctor & Dept Card Block */}

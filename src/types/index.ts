@@ -1,24 +1,259 @@
 export type SupportedLanguage = 'en' | 'hi' | 'te' | 'ta' | 'kn' | 'ml' | 'mr' | 'bn';
 
-export interface Prescription { _id: string; patientId: string; title: string; doctorName: string; hospitalName: string; prescriptionDate: string; notes: string; createdAt: string; updatedAt: string; }
-export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded';
-export interface Payment { _id: string; userId: string; appointmentId: string; amount: number; currency: string; stripeCheckoutSessionId?: string; stripePaymentIntentId?: string; status: PaymentStatus; createdAt: string; updatedAt: string; }
+export interface Patient {
+  _id: string;
+  name: string;
+  age: number;
+  phone: string;
+  email: string;
+  preferredLanguage: SupportedLanguage;
+  accessibilityMode: boolean;
+  authProviderId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
-export interface Patient { _id: string; name: string; age: number; phone: string; email: string; preferredLanguage: SupportedLanguage; accessibilityMode: boolean; authProviderId?: string; createdAt: string; updatedAt: string; }
-export interface DoctorAvailability { days: string[]; slots: string[]; }
+export interface DoctorAvailability {
+  days: string[];
+  slots: string[];
+}
+
 export type DoctorStatusType = 'Available' | 'Consulting' | 'On Break' | 'Delayed' | 'Completed';
-export interface Doctor { _id: string; name: string; specialization: string; departmentId: string; departmentName: string; experience: number; languages: string[]; consultationFee: number; profileImage: string; hospitalId: string; qualification: string; rating: number; about: string; availability: DoctorAvailability; isAvailableToday: boolean; nextAvailableSlot: string; doctorStatus: DoctorStatusType; createdAt?: string; updatedAt?: string; }
-export interface Department { _id: string; name: string; description: string; floor: string; block: string; location: string; services: string[]; preparationInstructions: string[]; iconName: string; }
-export interface HospitalMapNode { id: string; label: string; floor: string; block: string; x: number; y: number; }
-export interface Hospital { _id: string; name: string; address: string; phone: string; blocks: string[]; floors: string[]; mapNodes: HospitalMapNode[]; }
-export type AppointmentStatus = 'confirmed' | 'arrived' | 'waiting' | 'in_progress' | 'completed' | 'cancelled' | 'rescheduled';
-export type VisitType = 'new_visit' | 'follow_up'; export type VisitTypeSource = 'detected' | 'patient_confirmed';
-export interface Appointment { _id: string; patientId: string; patientName: string; patientPhone: string; doctorId: string; doctorName: string; doctorSpecialization: string; hospitalId: string; departmentId: string; departmentName: string; appointmentDate: string; appointmentTime: string; appointmentType: VisitType; visitType?: VisitType; visitTypeSource?: VisitTypeSource; previousAppointmentId?: string | null; previousAppointmentReason?: string; tokenNumber: string; status: AppointmentStatus; arrivalStatus?: 'not_arrived' | 'arrived'; arrivedAt?: string; cancelReason?: string; estimatedWaitTime: number; locationDetails: { block: string; floor: string; room: string }; createdAt: string; updatedAt: string; }
-export interface VisitTypeDetectionResult { visitType: VisitType; visitTypeSource: VisitTypeSource; previousAppointmentId: string | null; reason: string; matchedDoctorName?: string; matchedDepartmentName?: string; matchedDate?: string; needsConfirmation?: boolean; }
-export interface AppointmentPreparationInfo { appointmentId: string; visitType: VisitType | 'unavailable'; visitTypeLabel: string; doctorName: string; departmentName: string; appointmentDate: string; appointmentTime: string; instructions: string[]; documentsToBring: string[]; recommendedArrivalTimeMinutes: number; medicationNote: string; locationNote: string; }
-export interface QueueState { _id: string; appointmentId: string; doctorId: string; doctorName: string; departmentId: string; departmentName: string; currentToken: string; patientToken: string; patientsAhead: number; estimatedWaitTime: number; doctorStatus: DoctorStatusType; doctorStatusMessage: string; averageConsultationMinutes: number; recentConsultationDurations: number[]; startedAt?: string; isPatientArrived: boolean; lastUpdated: string; }
-export interface HospitalLocation { _id: string; hospitalId: string; building: string; block: string; floor: string; department: string; roomNumber: string; coordinates: { x: number; y: number }; directions: string[]; landmarks: string[]; walkingTimeMinutes: number; }
+
+export interface Doctor {
+  _id: string;
+  name: string;
+  specialization: string;
+  departmentId: string;
+  departmentName: string;
+  experience: number;
+  languages: string[];
+  consultationFee: number;
+  profileImage: string;
+  hospitalId: string;
+  qualification: string;
+  rating: number;
+  about: string;
+  availability: DoctorAvailability;
+  isAvailableToday: boolean;
+  nextAvailableSlot: string;
+  doctorStatus: DoctorStatusType;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Department {
+  _id: string;
+  name: string;
+  description: string;
+  floor: string;
+  block: string;
+  location: string;
+  services: string[];
+  preparationInstructions: string[];
+  iconName: string;
+}
+
+export interface HospitalMapNode {
+  id: string;
+  label: string;
+  floor: string;
+  block: string;
+  x: number;
+  y: number;
+}
+
+export interface Hospital {
+  _id: string;
+  name: string;
+  address: string;
+  phone: string;
+  blocks: string[];
+  floors: string[];
+  mapNodes: HospitalMapNode[];
+}
+
+export type AppointmentStatus =
+  | 'confirmed'
+  | 'arrived'
+  | 'waiting'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'rescheduled';
+
+export type VisitType = 'new_visit' | 'follow_up';
+export type VisitTypeSource = 'detected' | 'patient_confirmed';
+
+export interface Appointment {
+  _id: string;
+  patientId: string;
+  patientName: string;
+  patientPhone: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialization: string;
+  hospitalId: string;
+  departmentId: string;
+  departmentName: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  appointmentType: VisitType;
+  visitType?: VisitType;
+  visitTypeSource?: VisitTypeSource;
+  previousAppointmentId?: string | null;
+  previousAppointmentReason?: string;
+  tokenNumber: string;
+  status: AppointmentStatus;
+  arrivalStatus?: 'not_arrived' | 'arrived';
+  arrivedAt?: string;
+  paymentStatus?: PaymentStatus;
+  cancelReason?: string;
+  estimatedWaitTime: number;
+  locationDetails: {
+    block: string;
+    floor: string;
+    room: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VisitTypeDetectionResult {
+  visitType: VisitType;
+  visitTypeSource: VisitTypeSource;
+  previousAppointmentId: string | null;
+  reason: string;
+  matchedDoctorName?: string;
+  matchedDepartmentName?: string;
+  matchedDate?: string;
+  needsConfirmation?: boolean;
+}
+
+export interface AppointmentPreparationInfo {
+  appointmentId: string;
+  visitType: VisitType | 'unavailable';
+  visitTypeLabel: string;
+  doctorName: string;
+  departmentName: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  instructions: string[];
+  documentsToBring: string[];
+  recommendedArrivalTimeMinutes: number;
+  medicationNote: string;
+  locationNote: string;
+}
+
+export interface QueueState {
+  _id: string;
+  appointmentId: string;
+  doctorId: string;
+  doctorName: string;
+  departmentId: string;
+  departmentName: string;
+  currentToken: string;
+  patientToken: string;
+  patientsAhead: number;
+  estimatedWaitTime: number;
+  doctorStatus: DoctorStatusType;
+  doctorStatusMessage: string;
+  averageConsultationMinutes: number;
+  recentConsultationDurations: number[];
+  startedAt?: string;
+  isPatientArrived: boolean;
+  lastUpdated: string;
+}
+
+export interface HospitalLocation {
+  _id: string;
+  hospitalId: string;
+  building: string;
+  block: string;
+  floor: string;
+  department: string;
+  roomNumber: string;
+  coordinates: { x: number; y: number };
+  directions: string[];
+  landmarks: string[];
+  walkingTimeMinutes: number;
+}
+
 export type UserRole = 'patient' | 'doctor' | 'staff' | 'hospital_admin';
-export interface User { _id: string; name: string; email: string; phone: string; passwordHash?: string; role: UserRole; profileImage?: string; specialization?: string; departmentId?: string; departmentName?: string; hospitalId?: string; accessibilityMode?: boolean; createdAt: string; updatedAt: string; }
-export type SarvamIntentType = 'find_doctor' | 'find_department' | 'book_appointment' | 'view_appointment' | 'check_queue' | 'navigate_hospital' | 'appointment_preparation' | 'cancel_appointment' | 'reschedule_appointment' | 'help' | 'general_help' | 'unknown';
-export interface SarvamIntentResponse { intent: SarvamIntentType; department?: string; specialization?: string; doctorName?: string; date?: string; timePreference?: string; language?: SupportedLanguage; responseText: string; extractedParams?: Record<string, any>; matchedDoctors?: Doctor[]; }
+
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  passwordHash?: string;
+  role: UserRole;
+  profileImage?: string;
+  specialization?: string;
+  departmentId?: string;
+  departmentName?: string;
+  hospitalId?: string;
+  accessibilityMode?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Prescription {
+  _id: string;
+  patientId: string;
+  doctorId: string;
+  doctorName: string;
+  hospitalId: string;
+  hospitalName: string;
+  appointmentId?: string;
+  title: string;
+  prescriptionDate: string;
+  medicines?: string;
+  dosage?: string;
+  instructions?: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded';
+
+export interface Payment {
+  _id: string;
+  patientId: string;
+  appointmentId: string;
+  amount: number;
+  currency: string;
+  stripeCheckoutSessionId?: string;
+  stripePaymentIntentId?: string;
+  status: PaymentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SarvamIntentType =
+  | 'find_doctor'
+  | 'find_department'
+  | 'book_appointment'
+  | 'view_appointment'
+  | 'check_queue'
+  | 'navigate_hospital'
+  | 'appointment_preparation'
+  | 'cancel_appointment'
+  | 'reschedule_appointment'
+  | 'help'
+  | 'general_help'
+  | 'unknown';
+
+export interface SarvamIntentResponse {
+  intent: SarvamIntentType;
+  department?: string;
+  specialization?: string;
+  doctorName?: string;
+  date?: string;
+  timePreference?: string;
+  language?: SupportedLanguage;
+  responseText: string;
+  extractedParams?: Record<string, any>;
+  matchedDoctors?: Doctor[];
+}

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Search, Calendar, MapPin, HelpCircle, Mic, HeartPulse, Clock, UserCheck, Loader2 } from 'lucide-react';
-import { SupportedLanguage, Appointment } from '../types/index.js';
+import { Search, Calendar, MapPin, HelpCircle, Mic, HeartPulse, Clock, UserCheck, Loader2, FileText } from 'lucide-react';
+import { SupportedLanguage, Appointment, User as UserType } from '../types/index.js';
 import { api } from '../services/api.js';
 import { t } from '../services/i18n.js';
 
 interface SeniorModeHomeProps {
+  currentUser: UserType | null;
   currentLang: SupportedLanguage;
   activeAppointment: Appointment | null;
   appointments: Appointment[];
@@ -15,6 +16,7 @@ interface SeniorModeHomeProps {
 }
 
 export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
+  currentUser,
   currentLang,
   activeAppointment,
   appointments,
@@ -54,7 +56,7 @@ export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
           <HeartPulse className="w-10 h-10" />
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-outfit">
-          {t('greeting', currentLang)}, Rajesh
+          {t('greeting', currentLang)}, {currentUser?.name?.split(' ')[0] || 'Patient'}
         </h1>
         <p className="text-xl text-slate-700 font-medium">
           {t('howCanWeHelp', currentLang)}
@@ -209,6 +211,20 @@ export const SeniorModeHome: React.FC<SeniorModeHomeProps> = ({
           <div>
             <div className="text-2xl font-bold font-outfit">FIND DEPARTMENT</div>
             <div className="text-sm font-medium text-indigo-100">Hospital wings & specialties</div>
+          </div>
+        </button>
+
+        {/* MEDICAL RECORDS */}
+        <button
+          onClick={() => onNavigate('prescriptions')}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-2xl shadow-lg border-2 border-blue-700 flex items-center gap-4 text-left transition-transform active:scale-98 cursor-pointer"
+        >
+          <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center text-white shrink-0">
+            <FileText className="w-10 h-10" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold font-outfit">MEDICAL RECORDS</div>
+            <div className="text-sm font-medium text-blue-100">View your prescriptions</div>
           </div>
         </button>
 

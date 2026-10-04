@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import Stripe from 'stripe';
 import {
   connectToDatabase,
   getDoctors,
@@ -29,7 +30,16 @@ import {
   getUserByEmail,
   getUserById,
   createUser,
-  verifyUserPassword
+  verifyUserPassword,
+  getPrescriptionsForPatient,
+  getPrescriptionsForDoctor,
+  getPrescriptionsForAuthorizedDoctor,
+  createPrescription,
+  updatePrescription,
+  deletePrescription,
+  getPaymentByAppointmentId,
+  createPayment,
+  updatePaymentStatus
 } from './src/db/mongo.js';
 import { processSarvamNLU } from './src/services/sarvam/intentEngine.js';
 import { processSarvamSTT } from './src/services/sarvam/voiceEngine.js';
@@ -233,33 +243,28 @@ app.get('/api/appointments/detect-visit-type', async (req, res) => {
 
 app.get('/api/appointments', async (req, res) => {
   try {
-    const role = req.headers['x-user-role'] as string || req.query.role as string;
-    const userId = req.headers['x-user-id'] as string || req.query.userId as string;
-    const patientIdParam = req.query.patientId as string;
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+
+    if (!userId || !role) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
     let filterParams: { patientId?: string; doctorId?: string; role?: string } = {};
 
     if (role === 'patient') {
       filterParams.role = 'patient';
-      filterParams.patientId = patientIdParam || (userId === 'user_patient_1' ? 'pat_rajesh_kumar' : `pat_${userId}`);
+      filterParams.patientId = await resolvePatientId(userId, role);
     } else if (role === 'doctor') {
       filterParams.role = 'doctor';
-      const user = userId ? await getUserById(userId) : null;
-      if (user) {
-        const doctors = await getDoctors();
-        const matchedDoc = doctors.find(d => d.name.toLowerCase() === user.name.toLowerCase() || d._id === user._id || d.departmentId === user.departmentId);
-        if (matchedDoc) {
-          filterParams.doctorId = matchedDoc._id;
-        } else {
-          filterParams.doctorId = 'doc_anil_sharma';
-        }
-      } else {
-        filterParams.doctorId = 'doc_anil_sharma';
-      }
-    } else if (role === 'staff' || role === 'hospital_admin') {
-      filterParams.role = role;
+      const doctors = await getDoctors();
+      const matchedDoc = doctors.find(d => 
+        d._id === userId || 
+        d.name.toLowerCase() === (userId === 'user_doctor_1' ? 'dr. anil sharma' : '').toLowerCase()
+      );
+      filterParams.doctorId = matchedDoc?._id || 'doc_anil_sharma';
     } else {
-      filterParams.patientId = patientIdParam || 'pat_rajesh_kumar';
+      filterParams.role = role;
     }
 
     const apps = await getAppointments(filterParams as any);
@@ -291,7 +296,9 @@ app.get('/api/appointments/:id', async (req, res) => {
 
 app.post('/api/appointments', async (req, res) => {
   try {
-    const patientId = 'pat_rajesh_kumar';
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    const patientId = await resolvePatientId(userId, role);
     const patientName = req.body.patientName || 'Rajesh Kumar';
     const patientPhone = req.body.patientPhone || '+91 98765 43210';
 
@@ -422,6 +429,250 @@ app.patch('/api/queue/:appointmentId', async (req, res) => {
     res.json(updated);
   } catch (e: any) {
     res.status(500).json({ error: 'Failed to update queue', details: e.message });
+  }
+});
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder_key', {
+  apiVersion: '2025-02-24.acacia' as any
+});
+
+async function resolvePatientId(userId?: string, role?: string): Promise<string> {
+  if (!userId) return 'pat_rajesh_kumar';
+  if (userId === 'user_patient_1') return 'pat_rajesh_kumar';
+  const user = await getUserById(userId);
+  if (user && user.role === 'patient') {
+    return `pat_${user._id}`;
+  }
+  return `pat_${userId}`;
+}
+
+// PRESCRIPTIONS ENDPOINTS
+app.get('/api/prescriptions', async (req, res) => {
+  try {
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    
+    if (role === 'patient') {
+      const patientId = await resolvePatientId(userId, role);
+      const prescriptions = await getPrescriptionsForPatient(patientId);
+      return res.json(prescriptions);
+    } else if (role === 'doctor') {
+      // Find doctor record
+      const doctors = await getDoctors();
+      const matchedDoc = doctors.find(d => d._id === userId || d.name.toLowerCase() === (userId === 'user_doctor_1' ? 'dr. anil sharma' : '').toLowerCase());
+      const doctorId = matchedDoc?._id || userId;
+      
+      const prescriptions = await getPrescriptionsForAuthorizedDoctor(doctorId);
+      return res.json(prescriptions);
+    } else {
+      return res.status(403).json({ error: 'Access denied. Prescriptions are only available for patients and doctors.' });
+    }
+  } catch (e: any) {
+    console.error('[API] Error fetching prescriptions:', {
+      error: e.message,
+      stack: e.stack,
+      role: req.headers['x-user-role'],
+      userId: req.headers['x-user-id']
+    });
+    res.status(500).json({ error: 'Failed to fetch prescriptions', details: e.message });
+  }
+});
+
+app.post('/api/prescriptions', async (req, res) => {
+  try {
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    
+    if (role !== 'doctor') {
+      return res.status(403).json({ error: 'Access denied. Only authorized doctors can create prescriptions.' });
+    }
+
+    const { patientId, title, prescriptionDate, notes, appointmentId } = req.body;
+    if (!patientId || !title) {
+      return res.status(400).json({ error: 'Patient ID and prescription title are required' });
+    }
+
+    // Resolve doctor info
+    const doctors = await getDoctors();
+    const matchedDoc = doctors.find(d => d._id === userId || d.name.toLowerCase() === (userId === 'user_doctor_1' ? 'dr. anil sharma' : '').toLowerCase());
+    const doctorId = matchedDoc?._id || userId;
+    const doctorName = matchedDoc?.name || 'Dr. Specialist';
+    const hospitalId = matchedDoc?.hospitalId || 'hosp_careflow_01';
+
+    const newPrescription = await createPrescription({
+      patientId,
+      doctorId,
+      doctorName,
+      hospitalId,
+      hospitalName: 'CareFlow Multispeciality Hospital',
+      title,
+      prescriptionDate,
+      notes,
+      appointmentId
+    });
+    res.status(201).json(newPrescription);
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to create prescription', details: e.message });
+  }
+});
+
+app.patch('/api/prescriptions/:id', async (req, res) => {
+  try {
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    
+    if (role !== 'doctor') {
+      return res.status(403).json({ error: 'Access denied. Only doctors can edit prescriptions.' });
+    }
+
+    // Resolve doctorId
+    const doctors = await getDoctors();
+    const matchedDoc = doctors.find(d => d._id === userId || d.name.toLowerCase() === (userId === 'user_doctor_1' ? 'dr. anil sharma' : '').toLowerCase());
+    const doctorId = matchedDoc?._id || userId;
+
+    const updated = await updatePrescription(req.params.id, doctorId, req.body);
+    if (!updated) {
+      return res.status(404).json({ error: 'Prescription not found or unauthorized' });
+    }
+    res.json(updated);
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to update prescription', details: e.message });
+  }
+});
+
+app.delete('/api/prescriptions/:id', async (req, res) => {
+  try {
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    
+    if (role !== 'doctor') {
+      return res.status(403).json({ error: 'Access denied. Patients cannot delete prescriptions.' });
+    }
+
+    // Resolve doctorId
+    const doctors = await getDoctors();
+    const matchedDoc = doctors.find(d => d._id === userId || d.name.toLowerCase() === (userId === 'user_doctor_1' ? 'dr. anil sharma' : '').toLowerCase());
+    const doctorId = matchedDoc?._id || userId;
+
+    const success = await deletePrescription(req.params.id, doctorId, role);
+    if (!success) {
+      return res.status(404).json({ error: 'Prescription not found or unauthorized' });
+    }
+    res.json({ message: 'Prescription deleted successfully' });
+  } catch (e: any) {
+    res.status(500).json({ error: 'Failed to delete prescription', details: e.message });
+  }
+});
+
+// STRIPE PAYMENT ENDPOINTS
+app.post('/api/payments/create-checkout-session', async (req, res) => {
+  try {
+    const role = req.headers['x-user-role'] as string;
+    const userId = req.headers['x-user-id'] as string;
+    if (role !== 'patient') {
+      return res.status(403).json({ error: 'Access denied. Only patients can make appointment payments.' });
+    }
+
+    const { appointmentId, amount } = req.body;
+    if (!appointmentId) {
+      return res.status(400).json({ error: 'appointmentId is required' });
+    }
+
+    const appointment = await getAppointmentById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    const patientId = await resolvePatientId(userId, role);
+    if (appointment.patientId !== patientId && userId !== 'user_patient_1') {
+      return res.status(403).json({ error: 'Unauthorized access to appointment payment' });
+    }
+
+    const chargeAmount = Math.round(Number(amount) || 750) * 100;
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers.host || req.get('host');
+    const successUrl = `${protocol}://${host}/?payment=success&appointment_id=${appointmentId}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${protocol}://${host}/?payment=cancelled&appointment_id=${appointmentId}`;
+
+    let session: Stripe.Checkout.Session;
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+
+    if (!stripeKey || stripeKey.startsWith('sk_test_placeholder') || stripeKey.includes('placeholder')) {
+      const mockSessionId = `cs_test_mock_${Date.now()}`;
+      session = {
+        id: mockSessionId,
+        url: `${protocol}://${host}/?payment=success&appointment_id=${appointmentId}&session_id=${mockSessionId}`
+      } as any;
+    } else {
+      session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: 'inr',
+              product_data: {
+                name: `Consultation with ${appointment.doctorName}`,
+                description: `${appointment.departmentName} Department - CareFlow Hospital`
+              },
+              unit_amount: chargeAmount
+            },
+            quantity: 1
+          }
+        ],
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          appointmentId,
+          patientId
+        }
+      });
+    }
+
+    await createPayment({
+      patientId,
+      appointmentId,
+      amount: Number(amount) || 750,
+      currency: 'inr',
+      stripeCheckoutSessionId: session.id,
+      status: 'pending'
+    });
+
+    res.json({ sessionId: session.id, url: session.url });
+  } catch (e: any) {
+    console.error('[Stripe Error]', e);
+    res.status(500).json({ error: e.message || 'Failed to create Stripe payment session' });
+  }
+});
+
+app.post('/api/payments/verify-session', async (req, res) => {
+  try {
+    const { sessionId, appointmentId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    if (sessionId.startsWith('cs_test_mock_')) {
+      if (appointmentId) {
+        await updateAppointmentStatus(appointmentId, 'confirmed');
+      }
+      await updatePaymentStatus(sessionId, 'paid', `pi_mock_${Date.now()}`);
+      return res.json({ status: 'paid', verified: true, appointmentId });
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status === 'paid') {
+      const apptId = session.metadata?.appointmentId || appointmentId;
+      if (apptId) {
+        await updateAppointmentStatus(apptId, 'confirmed');
+      }
+      await updatePaymentStatus(sessionId, 'paid', session.payment_intent as string);
+      return res.json({ status: 'paid', verified: true, appointmentId: apptId });
+    } else {
+      await updatePaymentStatus(sessionId, 'failed');
+      return res.status(400).json({ status: session.payment_status, verified: false });
+    }
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to verify payment session' });
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Mic,
@@ -18,14 +18,11 @@ import {
   HelpCircle,
   ShieldCheck,
   Check,
-  Ban,
-  VolumeX
+  Ban
 } from 'lucide-react';
 import { SupportedLanguage, SarvamIntentResponse } from '../types/index.js';
-import { LANG_SPEECH_CODES, speakText, stopSpeaking } from '../services/sarvamClient.js';
+import { LANG_SPEECH_CODES, speakText, startVoiceRecognition } from '../services/sarvamClient.js';
 import { api } from '../services/api.js';
-
-type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 interface VoiceAssistantModalProps {
   currentLang: SupportedLanguage;
@@ -40,286 +37,112 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   onClose,
   onIntentExecute
 }) => {
-  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  const [rawSpeechText, setRawSpeechText] = useState('');
-  const [pendingPreviewText, setPendingPreviewText] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
   const [textInput, setTextInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [sarvamResponse, setSarvamResponse] = useState<SarvamIntentResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [context, setContext] = useState<Record<string, any>>({});
 
-  // Refs for browser API objects — avoid stale closures and recreation
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-  const isMountedRef = useRef(true);
-  const isProcessingRef = useRef(false);
-  const voiceStateRef = useRef<VoiceState>('idle');
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
-  // Keep voiceStateRef in sync so async callbacks read current value
-  useEffect(() => {
-    voiceStateRef.current = voiceState;
-  }, [voiceState]);
-
-  // Check browser support once
-  const browserSupport = useRef<boolean>(
-    typeof navigator !== 'undefined' &&
-      !!navigator.mediaDevices &&
-      typeof navigator.mediaDevices.getUserMedia === 'function' &&
-      typeof window !== 'undefined' &&
-      typeof (window as any).MediaRecorder !== 'undefined'
-  );
-
-  const updateState = useCallback((newState: VoiceState) => {
-    if (!isMountedRef.current) return;
-    voiceStateRef.current = newState;
-    setVoiceState(newState);
-  }, []);
-
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64data = (reader.result as string).split(',')[1];
-        resolve(base64data);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  const cleanupMediaResources = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {}
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-  }, []);
-
-  const handleStartListening = async () => {
-    // Guard against double-clicks and overlapping sessions
-    if (voiceStateRef.current === 'listening' || voiceStateRef.current === 'processing') {
-      return;
+  const handleStartListening = () => {
+    // 1. Interrupt any current speech
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
 
-    // If currently speaking, stop TTS first (interruption)
-    if (voiceStateRef.current === 'speaking') {
-      stopSpeaking();
+    // 2. Stop any existing recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
-
-    if (!browserSupport.current) {
-      setErrorMessage('Voice input is not supported in this browser. Please type your request below.');
-      return;
-    }
-
-    // Release any active stream/recorder first
-    cleanupMediaResources();
 
     setErrorMessage('');
     setSarvamResponse(null);
-    setRawSpeechText('');
-    setPendingPreviewText('');
-    audioChunksRef.current = [];
-    isProcessingRef.current = false;
+    setTranscript('');
+    setIsListening(true);
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!isMountedRef.current) {
-        stream.getTracks().forEach(t => t.stop());
-        return;
+    recognitionRef.current = startVoiceRecognition(currentLang, {
+      onStart: () => {
+        setIsListening(true);
+      },
+      onResult: (text) => {
+        setTranscript(text);
+      },
+      onEnd: () => {
+        setIsListening(false);
+        // We'll wait for the user to confirm or auto-process if transcript is long enough?
+        // Actually, for a better UX, let's auto-process after a short delay or when 'final' result is received.
+        // In startVoiceRecognition, we set continuous=false, so it ends when user stops speaking.
+      },
+      onError: (err) => {
+        setIsListening(false);
+        setErrorMessage(err);
       }
-      streamRef.current = stream;
-
-      // Use the actual MIME type the browser supports
-      let mimeType = 'audio/webm';
-      if (typeof (window as any).MediaRecorder !== 'undefined') {
-        const types = ['audio/webm', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
-        for (const t of types) {
-          if ((window as any).MediaRecorder.isTypeSupported(t)) {
-            mimeType = t;
-            break;
-          }
-        }
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        if (!isMountedRef.current) return;
-
-        // Prevent duplicate processing
-        if (isProcessingRef.current) return;
-        isProcessingRef.current = true;
-
-        updateState('processing');
-        try {
-          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-          if (audioBlob.size < 100) {
-            throw new Error('No speech detected or recording was too short.');
-          }
-          const base64 = await blobToBase64(audioBlob);
-
-          if (!isMountedRef.current) return;
-
-          const result = await api.sendSarvamVoice(base64, currentLang, context);
-
-          if (!isMountedRef.current) return;
-
-          setRawSpeechText(result.transcript);
-          setPendingPreviewText(result.transcript);
-          setSarvamResponse(result);
-
-          if (result.extractedParams?.context) {
-            setContext((prev) => ({ ...prev, ...result.extractedParams?.context }));
-          }
-
-          // Speak the response with proper state tracking
-          if (result.responseText) {
-            updateState('speaking');
-            speakText(result.responseText, currentLang, {
-              onEnd: () => {
-                if (!isMountedRef.current) return;
-                isProcessingRef.current = false;
-                updateState('idle');
-              },
-              onError: () => {
-                if (!isMountedRef.current) return;
-                isProcessingRef.current = false;
-                updateState('idle');
-              }
-            });
-          } else {
-            isProcessingRef.current = false;
-            updateState('idle');
-          }
-
-          if (!result.extractedParams?.requiresConfirmation) {
-            onIntentExecute(result, false);
-          }
-        } catch (err: any) {
-          if (!isMountedRef.current) return;
-          console.error('[Voice Assistant] Failed transcription/interpretation:', err);
-          setErrorMessage(
-            err.message?.includes('No speech detected')
-              ? err.message
-              : 'Could not understand the recording. Please speak clearly or write your request below.'
-          );
-          isProcessingRef.current = false;
-          updateState('idle');
-        } finally {
-          // Always stop mic tracks after recording is processed
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-          }
-        }
-      };
-
-      mediaRecorder.start();
-      updateState('listening');
-    } catch (err: any) {
-      if (!isMountedRef.current) return;
-      console.warn('[Voice Assistant] Mic access error:', err);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setErrorMessage('Microphone access was denied. Please enable mic permissions in your browser bar.');
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setErrorMessage('No microphone found. Please connect a microphone or type your request below.');
-      } else {
-        setErrorMessage('Could not activate microphone. Please ensure your microphone is active and plugged in.');
-      }
-      updateState('idle');
-    }
+    });
   };
 
-  const handleStopListening = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {}
+  const handleStopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
-    // Stop mic tracks immediately — the onstop handler will process audio
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-    }
-    // Don't set to idle here; onstop will transition to processing
-    if (voiceStateRef.current === 'listening') {
-      updateState('processing');
-    }
-  }, [updateState]);
+    setIsListening(false);
+  };
 
-  // Interrupt speaking and go back to idle
-  const handleStopSpeaking = useCallback(() => {
-    stopSpeaking();
-    isProcessingRef.current = false;
-    updateState('idle');
-  }, [updateState]);
-
-  // Cleanup on unmount: stop recognition, mic tracks, TTS, listeners
+  // Auto-execute NLU when transcript is finalized (onEnd)
   useEffect(() => {
-    isMountedRef.current = true;
+    if (!isListening && transcript.trim() && !isProcessing && !sarvamResponse) {
+      const timer = setTimeout(() => {
+        executeNLU(transcript);
+      }, 500); // Small delay to let UI settle
+      return () => clearTimeout(timer);
+    }
+  }, [isListening, transcript, isProcessing, sarvamResponse]);
+
+  useEffect(() => {
     return () => {
-      isMountedRef.current = false;
-      cleanupMediaResources();
-      stopSpeaking();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
     };
-  }, [cleanupMediaResources]);
+  }, []);
 
   const executeNLU = async (queryText: string) => {
-    if (!queryText.trim() || isProcessingRef.current) return;
-    isProcessingRef.current = true;
+    if (!queryText.trim()) return;
+    setIsProcessing(true);
     setErrorMessage('');
-    setPendingPreviewText('');
-    setRawSpeechText('');
-    updateState('processing');
+    setSarvamResponse(null);
 
     try {
       const result = await api.sendSarvamIntent(queryText, currentLang, context);
-      if (!isMountedRef.current) return;
-
       setSarvamResponse(result);
+      setIsProcessing(false);
 
       if (result.extractedParams?.context) {
         setContext((prev) => ({ ...prev, ...result.extractedParams?.context }));
       }
 
+      // Voice feedback
       if (result.responseText) {
-        updateState('speaking');
-        speakText(result.responseText, currentLang, {
-          onEnd: () => {
-            if (!isMountedRef.current) return;
-            isProcessingRef.current = false;
-            updateState('idle');
-          },
-          onError: () => {
-            if (!isMountedRef.current) return;
-            isProcessingRef.current = false;
-            updateState('idle');
-          }
-        });
-      } else {
-        isProcessingRef.current = false;
-        updateState('idle');
+        speakText(result.responseText, currentLang);
       }
 
-      if (!result.extractedParams?.requiresConfirmation) {
-        onIntentExecute(result, false);
+      if (!result.extractedParams?.requiresConfirmation && !result.extractedParams?.requiresClarification) {
+        // Auto-execute simple navigation intents after 1.5s delay so user can hear the response
+        setTimeout(() => {
+          onIntentExecute(result, false);
+          onClose();
+        }, 1500);
       }
     } catch (e: any) {
-      if (!isMountedRef.current) return;
-      isProcessingRef.current = false;
-      updateState('idle');
-      setErrorMessage("I couldn't complete that request right now. Please try again.");
+      setIsProcessing(false);
+      setErrorMessage(
+        "I couldn't complete that request right now. Please try again."
+      );
     }
   };
 
@@ -327,7 +150,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const handleConfirmAction = () => {
     if (sarvamResponse) {
       onIntentExecute(sarvamResponse, true);
-      stopSpeaking();
       onClose();
     }
   };
@@ -335,20 +157,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const handleChangeAction = () => {
     if (sarvamResponse) {
       onIntentExecute({ ...sarvamResponse, intent: 'find_doctor' }, false);
-      stopSpeaking();
       onClose();
     }
   };
-
-  const handleClose = () => {
-    cleanupMediaResources();
-    stopSpeaking();
-    onClose();
-  };
-
-  const isListening = voiceState === 'listening';
-  const isProcessing = voiceState === 'processing';
-  const isSpeaking = voiceState === 'speaking';
 
   return (
     <div
@@ -358,7 +169,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       aria-labelledby="voice-modal-title"
     >
       <div className="bg-slate-900 text-white rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-2xl border border-slate-800 space-y-5 relative overflow-hidden my-auto max-h-[92dvh] flex flex-col">
-
+        
         {/* Ambient Glow */}
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -384,7 +195,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
           </div>
 
           <button
-            onClick={handleClose}
+            onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
             aria-label="Close voice assistant"
           >
@@ -394,36 +205,25 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
 
         {/* Body Container */}
         <div className="overflow-y-auto space-y-5 flex-1 pr-1">
-
+          
           {/* Microphone Central Area */}
           <div className="flex flex-col items-center justify-center text-center space-y-3 relative z-10 pt-2">
             <button
-              onClick={isListening ? handleStopListening : isSpeaking ? handleStopSpeaking : handleStartListening}
-              disabled={isProcessing}
+              onClick={isListening ? handleStopListening : handleStartListening}
               className={`rounded-full flex items-center justify-center transition-all shadow-xl cursor-pointer ${
                 seniorMode ? 'w-24 h-24 sm:w-28 sm:h-28' : 'w-20 h-20 sm:w-24 sm:h-24'
               } ${
                 isListening
                   ? 'voice-pulse bg-teal-600 text-white scale-105 ring-4 ring-teal-400/50'
-                  : isSpeaking
-                  ? 'bg-amber-600 text-white scale-105 ring-4 ring-amber-400/50'
-                  : isProcessing
-                  ? 'bg-slate-700 text-slate-400 cursor-wait'
                   : 'bg-slate-800 hover:bg-slate-700 text-teal-400 border-2 border-teal-500/40'
               }`}
-              aria-label={isListening ? 'Stop listening' : isSpeaking ? 'Stop speaking' : 'Start listening'}
+              aria-label={isListening ? 'Stop listening' : 'Start listening'}
             >
-              {isSpeaking ? (
-                <VolumeX className={`${seniorMode ? 'w-10 h-10 sm:w-12 sm:h-12' : 'w-8 h-8 sm:w-10 sm:h-10'}`} />
-              ) : isProcessing ? (
-                <Loader2 className={`${seniorMode ? 'w-10 h-10 sm:w-12 sm:h-12' : 'w-8 h-8 sm:w-10 sm:h-10'} animate-spin`} />
-              ) : (
-                <Mic
-                  className={`${seniorMode ? 'w-10 h-10 sm:w-12 sm:h-12' : 'w-8 h-8 sm:w-10 sm:h-10'} ${
-                    isListening ? 'animate-pulse text-white' : ''
-                  }`}
-                />
-              )}
+              <Mic
+                className={`${seniorMode ? 'w-10 h-10 sm:w-12 sm:h-12' : 'w-8 h-8 sm:w-10 sm:h-10'} ${
+                  isListening ? 'animate-pulse text-white' : ''
+                }`}
+              />
             </button>
 
             {/* Current State Status */}
@@ -435,71 +235,60 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   ? 'text-teal-400 animate-pulse'
                   : isProcessing
                   ? 'text-amber-300'
-                  : isSpeaking
-                  ? 'text-amber-300'
                   : 'text-slate-300'
               }`}
             >
               {isListening
-                ? 'Listening... Tap to stop'
+                ? 'Listening...'
                 : isProcessing
                 ? 'Processing...'
-                : isSpeaking
-                ? 'Speaking... Tap to interrupt'
                 : 'Tap microphone or type request'}
             </div>
           </div>
 
-          {/* Browser Support Warning */}
-          {!browserSupport.current && (
-            <div className="p-3 bg-amber-950/80 text-amber-200 text-xs sm:text-sm rounded-2xl border border-amber-800 relative z-10 flex items-start gap-2 text-left">
-              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-              <span>Voice input is not supported in this browser. You can still type your request below.</span>
-            </div>
-          )}
-
           {/* Recognized Speech Text Preview */}
-          {pendingPreviewText && (
+          {(transcript || isListening) && (
             <div className="p-4 bg-slate-800/90 rounded-2xl border border-slate-700 space-y-3 relative z-10 animate-in fade-in duration-200">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                Recognized Request:
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center justify-between">
+                <span>{isListening ? 'Listening...' : 'Recognized Request:'}</span>
+                {isListening && <div className="w-2 h-2 rounded-full bg-teal-500 animate-ping" />}
               </div>
               <p
-                className={`font-medium text-teal-200 italic ${
+                className={`font-medium text-teal-200 italic min-h-[1.5em] ${
                   seniorMode ? 'text-base font-bold' : 'text-xs sm:text-sm'
                 }`}
               >
-                "{pendingPreviewText}"
+                {transcript ? `"${transcript}"` : <span className="text-slate-500 font-normal italic">Go ahead, I'm listening...</span>}
               </p>
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => executeNLU(pendingPreviewText)}
-                  disabled={isProcessing}
-                  className="uiverse-btn-primary px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex-1 cursor-pointer min-h-[44px] disabled:opacity-40"
-                >
-                  Continue
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStartListening}
-                  disabled={isProcessing}
-                  className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer min-h-[44px] disabled:opacity-40"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Try Again</span>
-                </button>
-              </div>
+              {!isListening && transcript && !isProcessing && !sarvamResponse && (
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => executeNLU(transcript)}
+                    className="uiverse-btn-primary px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex-1 cursor-pointer min-h-[44px]"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartListening}
+                    className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer min-h-[44px]"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Try Again</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           {/* Sarvam AI Response / Confirmation Block */}
-          {sarvamResponse && !pendingPreviewText && (
+          {sarvamResponse && !isListening && (
             <div className="p-4 bg-teal-950/90 rounded-2xl border border-teal-700/80 space-y-3 relative z-10 animate-in fade-in duration-200 text-left">
               <div className="flex items-center gap-2 text-teal-300 font-bold text-xs uppercase tracking-wider">
                 <Volume2 className="w-4 h-4" /> Voice Assistant Result
               </div>
-
+              
               <p
                 className={`text-teal-100 leading-relaxed ${
                   seniorMode ? 'text-base font-medium' : 'text-xs sm:text-sm'
@@ -528,7 +317,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                             appointmentTime: opt.appointmentTime,
                             tokenNumber: opt.tokenNumber
                           };
-                          stopSpeaking();
                           onIntentExecute({
                             ...sarvamResponse,
                             extractedParams: {
@@ -606,7 +394,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setSarvamResponse(null)}
-                        className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs sm:text-sm font-bold cursor-pointer min-h-[44px]"
+                        className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs sm:text-sm font-bold cursor-pointer min-h-[44px]"
                       >
                         Keep Appointment
                       </button>
@@ -628,7 +416,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setSarvamResponse(null)}
-                        className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs sm:text-sm font-bold cursor-pointer min-h-[44px]"
+                        className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs sm:text-sm font-bold cursor-pointer min-h-[44px]"
                       >
                         Keep Current Slot
                       </button>
@@ -643,7 +431,6 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      stopSpeaking();
                       onIntentExecute(sarvamResponse, false);
                       onClose();
                     }}
@@ -704,32 +491,28 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             <button
               type="button"
               onClick={() => executeNLU('Find a cardiologist tomorrow morning')}
-              disabled={isProcessing}
-              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px] disabled:opacity-40"
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px]"
             >
               "Find a cardiologist"
             </button>
             <button
               type="button"
               onClick={() => executeNLU('Check my queue')}
-              disabled={isProcessing}
-              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px] disabled:opacity-40"
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px]"
             >
               "Check my queue"
             </button>
             <button
               type="button"
               onClick={() => executeNLU('Where is cardiology department?')}
-              disabled={isProcessing}
-              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px] disabled:opacity-40"
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px]"
             >
               "Where is my department?"
             </button>
             <button
               type="button"
               onClick={() => executeNLU('What should I bring?')}
-              disabled={isProcessing}
-              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px] disabled:opacity-40"
+              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 border border-slate-700 cursor-pointer text-[11px]"
             >
               "What should I bring?"
             </button>

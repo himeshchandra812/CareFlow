@@ -3,7 +3,7 @@ import {
   X,
   Calendar,
   Clock,
-  User,
+  User as UserIcon,
   CheckCircle,
   ArrowRight,
   ArrowLeft,
@@ -14,14 +14,16 @@ import {
   Mail,
   Phone
 } from 'lucide-react';
-import { Doctor, SupportedLanguage, Appointment, QueueState } from '../types/index.js';
+import { Doctor, SupportedLanguage, Appointment, QueueState, User } from '../types/index.js';
 import { api } from '../services/api.js';
 import { DoctorAvatar } from './DoctorAvatar.js';
+import { authService } from '../services/auth.js';
 
 interface BookingStepperModalProps {
   doctor: Doctor | null;
   doctors?: Doctor[];
   currentLang: SupportedLanguage;
+  currentUser?: User | null;
   onClose: () => void;
   onBookingSuccess: (result: { appointment: Appointment; queue: QueueState }) => void;
 }
@@ -30,9 +32,12 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
   doctor,
   doctors = [],
   currentLang,
+  currentUser: propCurrentUser,
   onClose,
   onBookingSuccess
 }) => {
+  const currentUser = propCurrentUser || authService.getCurrentUser();
+
   // If no doctor is selected or modal is closed, do not render
   if (!doctor) return null;
 
@@ -59,9 +64,9 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
   );
 
   // Patient details states
-  const [patientName, setPatientName] = useState('Rajesh Kumar');
-  const [patientPhone, setPatientPhone] = useState('+91 98765 43210');
-  const [patientEmail, setPatientEmail] = useState('rajesh.kumar@careflow.org');
+  const [patientName, setPatientName] = useState(currentUser?.name || 'Rajesh Kumar');
+  const [patientPhone, setPatientPhone] = useState(currentUser?.phone || '+91 98765 43210');
+  const [patientEmail, setPatientEmail] = useState(currentUser?.email || 'rajesh.kumar@careflow.org');
 
   const [visitType, setVisitType] = useState<'new_visit' | 'follow_up'>('new_visit');
   const [visitTypeSource, setVisitTypeSource] = useState<'detected' | 'patient_confirmed'>('detected');
@@ -77,7 +82,7 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
       api.detectVisitType({
         doctorId: selectedDoctor._id,
         departmentId: selectedDoctor.departmentId,
-        patientId: 'pat_rajesh_kumar'
+        patientId: currentUser ? (currentUser.role === 'patient' ? `pat_${currentUser._id}` : currentUser._id) : 'pat_rajesh_kumar'
       })
         .then((res) => {
           if (isMounted) {
@@ -515,7 +520,7 @@ export const BookingStepperModal: React.FC<BookingStepperModalProps> = ({
                     Patient Full Name <span className="text-rose-600" aria-hidden="true">*</span>
                   </label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                       id="patient-full-name"
                       type="text"

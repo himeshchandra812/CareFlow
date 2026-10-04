@@ -1,4 +1,4 @@
-import { Hospital, Department, Doctor, HospitalLocation, Appointment, QueueState, Patient, User } from '../types/index.js';
+import { Hospital, Department, Doctor, HospitalLocation, Appointment, QueueState, Patient, User, Prescription, Payment } from '../types/index.js';
 
 export const SEED_HOSPITAL: Hospital = {
   _id: 'hosp_careflow_01',
@@ -554,6 +554,50 @@ export const SEED_USERS: User[] = [
     passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c0665911686c19ae1704e16a7',
     role: 'hospital_admin',
     hospitalId: 'hosp_careflow_01',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export const SEED_PRESCRIPTIONS: Prescription[] = [
+  {
+    _id: 'pres_101',
+    patientId: 'pat_rajesh_kumar',
+    doctorId: 'doc_anil_sharma',
+    doctorName: 'Dr. Anil Sharma',
+    hospitalId: 'hosp_careflow_01',
+    hospitalName: 'CareFlow Multispeciality Hospital',
+    title: 'Post-Cardiac Consultation Prescription',
+    prescriptionDate: '2026-02-15',
+    notes: 'Take Atorvastatin 10mg once daily at bedtime. Monitor blood pressure twice weekly. Return for follow-up ECG in 3 months.',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    _id: 'pres_102',
+    patientId: 'pat_rajesh_kumar',
+    doctorId: 'doc_ramesh_kumar',
+    doctorName: 'Dr. Ramesh Kumar',
+    hospitalId: 'hosp_careflow_01',
+    hospitalName: 'CareFlow Multispeciality Hospital',
+    title: 'Routine Health Check & Vitamin D Supplement',
+    prescriptionDate: '2025-11-10',
+    notes: 'Cholecalciferol 60,000 IU once weekly for 8 weeks. Stay hydrated and engage in moderate morning walks.',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export const SEED_PAYMENTS: Payment[] = [
+  {
+    _id: 'pay_1001',
+    patientId: 'pat_rajesh_kumar',
+    appointmentId: 'app_1000',
+    amount: 750,
+    currency: 'inr',
+    stripeCheckoutSessionId: 'cs_test_mock_session_1001',
+    stripePaymentIntentId: 'pi_test_mock_intent_1001',
+    status: 'paid',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }

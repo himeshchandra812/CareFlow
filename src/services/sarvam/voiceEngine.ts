@@ -22,10 +22,10 @@ export async function processSarvamSTT(request: SarvamVoiceRequest): Promise<str
   if (apiKey && request.audioBase64) {
     try {
       const audioBuffer = Buffer.from(request.audioBase64, 'base64');
-      const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
+      const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
 
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.wav');
+      formData.append('file', audioBlob, 'audio.webm');
       formData.append('model', 'saaras:v4');
       
       const langCode = request.language === 'en' 

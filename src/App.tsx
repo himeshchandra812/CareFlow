@@ -32,6 +32,7 @@ import { AuthScreen } from './components/AuthScreen.js';
 import { DoctorDashboard } from './components/DoctorDashboard.js';
 import { StaffDashboard } from './components/StaffDashboard.js';
 import { AdminDashboard } from './components/AdminDashboard.js';
+import { PrescriptionsView } from './components/PrescriptionsView.js';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
@@ -260,26 +261,16 @@ export default function App() {
   }
 
   let navItems = undefined;
-  if (currentUser.role === 'doctor') {
+  if (currentUser.role !== 'patient') {
+    navItems = [{ id: 'home', label: 'Dashboard', icon: Home }];
+  } else {
     navItems = [
       { id: 'home', label: 'Dashboard', icon: Home },
-      { id: 'doctor_schedule', label: 'Schedule', icon: Calendar },
-      { id: 'doctor_queue', label: 'Live Queue', icon: Clock },
-      { id: 'map', label: 'Navigate', icon: MapPin },
-      { id: 'help', label: 'Help', icon: HelpCircle }
-    ];
-  } else if (currentUser.role === 'staff') {
-    navItems = [
-      { id: 'home', label: 'Operations', icon: Home },
-      { id: 'staff_cases', label: 'Triage Cases', icon: Calendar },
-      { id: 'map', label: 'Navigate', icon: MapPin },
-      { id: 'help', label: 'Help', icon: HelpCircle }
-    ];
-  } else if (currentUser.role === 'hospital_admin') {
-    navItems = [
-      { id: 'home', label: 'Overview', icon: Home },
-      { id: 'admin_analytics', label: 'Analytics', icon: Clock },
-      { id: 'map', label: 'Navigate', icon: MapPin },
+      { id: 'doctors', label: 'Find Doctors / Hospitals', icon: Search },
+      { id: 'appointments', label: 'Appointments', icon: Calendar },
+      { id: 'prescriptions', label: 'Prescriptions', icon: Building2 },
+      { id: 'queue', label: 'Queue / Wait Time', icon: Clock },
+      { id: 'map', label: 'Hospital Map', icon: MapPin },
       { id: 'help', label: 'Help', icon: HelpCircle }
     ];
   }
@@ -471,6 +462,10 @@ export default function App() {
                 }}
                 onViewPrep={(dept) => setPreparationDept(dept)}
               />
+            )}
+
+            {currentTab === 'prescriptions' && currentUser.role === 'patient' && (
+              <PrescriptionsView onToast={showToast} />
             )}
 
             {currentTab === 'appointments' && (

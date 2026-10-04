@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Appointment, Doctor } from '../types/index.js';
+import { User, Appointment, Doctor, Department } from '../types/index.js';
 import { api } from '../services/api.js';
 import { Stethoscope, Calendar, Clock, CheckCircle2, RefreshCw, Phone, FileText, Users, MapPin, HelpCircle, User as UserIcon } from 'lucide-react';
 import { PrescriptionsView } from './PrescriptionsView.js';

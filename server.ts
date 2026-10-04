@@ -43,19 +43,7 @@ import {
 } from './src/db/mongo.js';
 import { processSarvamNLU } from './src/services/sarvam/intentEngine.js';
 import { processSarvamSTT } from './src/services/sarvam/voiceEngine.js';
-import Stripe from 'stripe';
 import crypto from 'crypto';
-import type { Prescription, Payment } from './src/types/index.js';
-
-const prescriptions: Prescription[] = [];
-const payments: Payment[] = [];
-const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
-const requirePatient = (req: express.Request, res: express.Response) => {
-  const userId = req.headers['x-user-id'] as string;
-  const role = req.headers['x-user-role'] as string;
-  if (!userId || role !== 'patient') { res.status(403).json({ error: 'Patient access required' }); return null; }
-  return userId;
-};
 
 dotenv.config();
 
@@ -74,37 +62,6 @@ connectToDatabase().catch(err => {
 });
 
 /* API ROUTES */
-
-app.get('/api/prescriptions', (req, res) => {
-  const userId = requirePatient(req, res); if (!userId) return;
-  res.json(prescriptions.filter(item => item.patientId === userId));
-});
-app.post('/api/prescriptions', (req, res) => {
-  const userId = requirePatient(req, res); if (!userId) return;
-  const { title, prescriptionDate, doctorName = '', hospitalName = '', notes = '' } = req.body || {};
-  if (!title?.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(prescriptionDate || '')) return res.status(400).json({ error: 'A valid title and prescription date are required' });
-  const now = new Date().toISOString();
-  const item = { _id: `prescription_${crypto.randomUUID()}`, patientId: userId, title: title.trim(), prescriptionDate, doctorName: String(doctorName).trim(), hospitalName: String(hospitalName).trim(), notes: String(notes).trim(), createdAt: now, updatedAt: now };
-  prescriptions.push(item); res.status(201).json(item);
-});
-app.delete('/api/prescriptions/:id', (req, res) => {
-  const userId = requirePatient(req, res); if (!userId) return;
-  const index = prescriptions.findIndex(item => item._id === req.params.id && item.patientId === userId);
-  if (index < 0) return res.status(404).json({ error: 'Prescription not found' });
-  prescriptions.splice(index, 1); res.json({ success: true });
-});
-app.post('/api/payments/checkout', async (req, res) => {
-  const userId = requirePatient(req, res); if (!userId) return;
-  if (!stripe) return res.status(503).json({ error: 'Stripe is not configured. Add STRIPE_SECRET_KEY for payment testing.' });
-  const { appointmentId } = req.body || {};
-  if (!appointmentId) return res.status(400).json({ error: 'Appointment is required' });
-  const existing = payments.find(p => p.userId === userId && p.appointmentId === appointmentId && p.status === 'paid');
-  if (existing) return res.status(409).json({ error: 'This appointment is already paid' });
-  const payment: Payment = { _id: `payment_${crypto.randomUUID()}`, userId, appointmentId, amount: 0, currency: 'inr', status: 'pending', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  const session = await stripe.checkout.sessions.create({ mode: 'payment', line_items: [{ price_data: { currency: 'inr', product_data: { name: 'CareFlow appointment' }, unit_amount: 100 }, quantity: 1 }], success_url: `${req.protocol}://${req.get('host')}/?payment=success`, cancel_url: `${req.protocol}://${req.get('host')}/?payment=cancelled`, metadata: { userId, appointmentId, paymentId: payment._id }, integration_identifier: `careflow_${crypto.randomBytes(4).toString('hex')}` });
-  payment.stripeCheckoutSessionId = session.id; payment.amount = 100; payments.push(payment); res.json({ url: session.url });
-});
-app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), (req, res) => { res.json({ received: true }); });
 
 // Health Check Endpoint
 app.get('/api/health', async (_req, res) => {

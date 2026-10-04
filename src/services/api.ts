@@ -56,12 +56,6 @@ export const api = {
 
   getAppointments: (): Promise<Appointment[]> => fetchJson(`${API_BASE}/appointments`),
 
-  getPrescriptions: (): Promise<import('../types/index.js').Prescription[]> => fetchJson(`${API_BASE}/prescriptions`),
-  createPrescription: (data: { title: string; prescriptionDate: string; doctorName: string; hospitalName: string; notes: string }) => fetchJson(`${API_BASE}/prescriptions`, { method: 'POST', body: JSON.stringify(data) }),
-  deletePrescription: (id: string) => fetchJson(`${API_BASE}/prescriptions/${id}`, { method: 'DELETE' }),
-
-  createPaymentCheckout: (appointmentId: string) => fetchJson<{ url: string }>(`${API_BASE}/payments/checkout`, { method: 'POST', body: JSON.stringify({ appointmentId }) }),
-
   getAppointmentById: (id: string): Promise<Appointment> => fetchJson(`${API_BASE}/appointments/${id}`),
 
   detectVisitType: (params: {
